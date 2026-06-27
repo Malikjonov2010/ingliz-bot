@@ -103,6 +103,11 @@ async def process_attendance_absent(callback: CallbackQuery, state: FSMContext, 
 @router.message(StudentAttendance.waiting_for_absence_reason)
 async def process_absence_reason(message: Message, state: FSMContext, db: Database):
     reason = message.text.strip()
+    
+    if reason.startswith('/'):
+        await message.answer("⚠️ Iltimos, avval nega darsga kelmaganingiz sababini yozib yuboring (Buyruqlar hozir ishlamaydi):")
+        return
+        
     if not reason:
         await message.answer("⚠️ Iltimos, darsga kelmaganligingiz sababini yozib yuboring:")
         return
@@ -246,7 +251,12 @@ async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
 
 @router.message(Deletion.waiting_for_reason)
 async def process_deletion_reason(message: Message, state: FSMContext, db: Database):
-    reason = message.text
+    reason = message.text.strip()
+    
+    if reason.startswith('/'):
+        await message.answer("⚠️ Iltimos, avval akkauntni o'chirish sababini yozib yuboring (Buyruqlar hozir ishlamaydi):")
+        return
+        
     user = await db.get_user(message.from_user.id)
     
     await message.answer("Sizning so'rovingiz adminga yuborildi. Kuting...")
@@ -266,7 +276,13 @@ async def process_deletion_reason(message: Message, state: FSMContext, db: Datab
 @router.message(Deletion.waiting_for_code)
 async def process_deletion_code(message: Message, state: FSMContext, db: Database):
     user = await db.get_user(message.from_user.id)
-    if user['deletion_code'] and message.text.strip() == user['deletion_code']:
+    text = message.text.strip()
+    
+    if text.startswith('/'):
+        await message.answer("⚠️ Iltimos, avval tasdiqlash kodini kiriting (Buyruqlar hozir ishlamaydi):")
+        return
+        
+    if user['deletion_code'] and text == user['deletion_code']:
         await db.delete_user(message.from_user.id)
         await message.answer("Akkauntingiz muvaffaqiyatli o'chirildi. /start orqali qayta ro'yxatdan o'tishingiz mumkin.", reply_markup=ReplyKeyboardRemove())
         await state.clear()
