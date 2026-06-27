@@ -220,12 +220,12 @@ class Database:
         async with self.pool.acquire() as connection:
             await connection.execute(query, user_id, date.today())
 
-    async def set_student_level(self, user_id: int, level: str) -> None:
-        query = "UPDATE users SET student_level = $2, student_level_updated_at = CURRENT_TIMESTAMP WHERE telegram_id = $1"
+    async def set_teacher_bio(self, user_id: int, bio: str) -> None:
+        query = "UPDATE users SET teacher_bio = $2 WHERE telegram_id = $1"
         async with self.pool.acquire() as connection:
-            await connection.execute(query, user_id, level)
+            await connection.execute(query, user_id, bio)
 
     async def get_active_users(self) -> List[asyncpg.Record]:
-        query = "SELECT telegram_id FROM users WHERE status = 'active'"
+        query = "SELECT * FROM users WHERE status = 'active'"
         async with self.pool.acquire() as connection:
             return await connection.fetch(query)

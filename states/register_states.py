@@ -35,3 +35,11 @@ class StudentAttendance(StatesGroup):
 
 class TeacherMessage(StatesGroup):
     waiting_for_message = State()
+
+class AdminPersonalMessage(StatesGroup):
+    waiting_for_message = State()
+    student_id = State()
+
+class AdminSetBio(StatesGroup):
+    waiting_for_bio = State()
+    student_id = State()

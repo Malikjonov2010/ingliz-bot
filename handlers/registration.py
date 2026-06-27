@@ -17,7 +17,17 @@ async def cmd_start(message: Message, state: FSMContext, db: Database):
     if user:
         if user['status'] == 'active':
             from handlers.student import get_user_keyboard
-            await message.answer("✅ Siz botdan ro'yxatdan o'tgansiz va hisobingiz faol.\nBot faol ishlamoqda. Pastdagi menyudan tugmalar orqali o'zingizga kerakli narsani boshqarishingiz mumkin.", reply_markup=get_user_keyboard(message.from_user.id))
+            
+            bio = user.get('teacher_bio')
+            bio_text = f"\n\n💡 **Ustozingizdan sizga maslahat/fikr:**\n_{bio}_\n" if bio else ""
+            
+            await message.answer(
+                f"✅ Siz botdan ro'yxatdan o'tgansiz va hisobingiz faol.\n"
+                f"Bot faol ishlamoqda. Pastdagi menyudan tugmalar orqali o'zingizga kerakli narsani boshqarishingiz mumkin."
+                f"{bio_text}", 
+                reply_markup=get_user_keyboard(message.from_user.id),
+                parse_mode="Markdown"
+            )
         elif user['status'] == 'pending':
             await message.answer("⏳ Sizning hisobingiz admin tomonidan tasdiqlanishini kutmoqda.")
         elif user['status'] == 'rejected':

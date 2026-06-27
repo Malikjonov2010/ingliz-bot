@@ -103,41 +103,197 @@ async def view_students_menu(message: Message, db: Database):
     if message.from_user.id not in ADMIN_IDS:
         return
         
-    groups = await db.get_all_groups()
-    if not groups:
-        await message.answer("Hozircha guruhlar yo'q.")
-        return
-        
-    kb = []
-    for g in groups:
-        kb.append([InlineKeyboardButton(text=f"📁 {g['name']}", callback_data=f"v_stud_grp:{g['id']}")])
-        
-    await message.answer("👤 **Qaysi guruh o'quvchilarini ko'rmoqchisiz?**", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
-
-@router.callback_query(F.data.startswith("v_stud_grp:"))
-async def view_students_in_group(callback: CallbackQuery, db: Database):
-    group_id = int(callback.data.split(":")[1])
-    group = await db.get_group(group_id)
-    group_name = group['name']
-    
-    async with db.pool.acquire() as connection:
-        students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", group_name)
-        
+    students = await db.get_active_users()
     if not students:
-        await callback.answer("Bu guruhda o'quvchilar yo'q.", show_alert=True)
+        await message.answer("Hozircha ro'yxatdan o'tgan o'quvchilar yo'q.")
         return
         
     kb = []
-    for s in students:
-        kb.append([InlineKeyboardButton(text=f"{s['first_name']} {s['last_name']}", callback_data=f"set_s_lvl:{s['telegram_id']}:{group_name}")])
+    # Telegram inline keyboard limit is 100 buttons.
+    for s in students[:90]:
+        kb.append([InlineKeyboardButton(text=f"👤 {s['first_name']} {s['last_name']}", callback_data=f"astud:{s['telegram_id']}")])
         
-    kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_v_stud_grp")])
-    await callback.message.edit_text(f"👥 **{group_name}** o'quvchilari:\nDarajasini belgilash uchun tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
+    await message.answer("👤 **Barcha o'quvchilar ro'yxati:**\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
 
-@router.callback_query(F.data == "back_to_v_stud_grp")
-async def back_to_v_stud_grp(callback: CallbackQuery, db: Database):
-    groups = await db.get_all_groups()
+@router.callback_query(F.data == "astud_list")
+async def back_to_astud_list(callback: CallbackQuery, db: Database):
+    students = await db.get_active_users()
     kb = []
-    for g in groups:
-        kb.append([InlineKeyboardButton(text=f"📁 {g['name']}", callback_data=f"v_stud_grp:{g['id']}")])
-    await callback.message.edit_text("👤 **Qaysi guruh o'quvchilarini ko'rmoqchisiz?**", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
+    for s in students[:90]:
+        kb.append([InlineKeyboardButton(text=f"👤 {s['first_name']} {s['last_name']}", callback_data=f"astud:{s['telegram_id']}")])
+    await callback.message.edit_text("👤 **Barcha o'quvchilar ro'yxati:**\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
+
+@router.callback_query(F.data.startswith("astud:"))
+async def view_astud_details(callback: CallbackQuery, db: Database):
+    stud_id = int(callback.data.split(":")[1])
+    student = await db.get_user(stud_id)
+    
+    if not student:
+        await callback.answer("O'quvchi topilmadi.", show_alert=True)
+        return
+        
+    days = student.get('days') or "Noma'lum"
+    bio = student.get('teacher_bio')
+    bio_text = f"\n**📝 Ustoz fikri:** {bio}" if bio else ""
+    
+    level_val = student.get('level', "Noma'lum")
+    student_level_val = student.get('student_level', 'Belgilanmagan')
+    
+    text = f"👤 **O'quvchi ma'lumotlari:**\n\n" \
+           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
+           f"**Yosh:** {student['age']}\n" \
+           f"**Tel:** {student['phone_number']}\n" \
+           f"**Guruh/Daraja:** {level_val}\n" \
+           f"**Kunlar:** {days}\n" \
+           f"**ID:** {student['telegram_id']}\n" \
+           f"**O'quvchi maqomi:** {student_level_val}" \
+           f"{bio_text}"
+           
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📈 Darajani belgilash", callback_data=f"astud_set_lvl:{stud_id}")],
+        [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{stud_id}")],
+        [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{stud_id}")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="astud_list")]
+    ])
+    
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+
+@router.callback_query(F.data.startswith("astud_set_lvl:"))
+async def astud_set_lvl(callback: CallbackQuery):
+    stud_id = int(callback.data.split(":")[1])
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="SUPPORT", callback_data=f"astud_save_lvl:{stud_id}:SUPPORT")],
+        [InlineKeyboardButton(text="CAPTAIN", callback_data=f"astud_save_lvl:{stud_id}:CAPTAIN")],
+        [InlineKeyboardButton(text="MAIN", callback_data=f"astud_save_lvl:{stud_id}:MAIN")],
+        [InlineKeyboardButton(text="LEARNER", callback_data=f"astud_save_lvl:{stud_id}:LEARNER")],
+        [InlineKeyboardButton(text="INTRODUCTORY", callback_data=f"astud_save_lvl:{stud_id}:INTRODUCTORY")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"astud:{stud_id}")]
+    ])
+    await callback.message.edit_text("O'quvchi uchun darajani (maqomini) tanlang:", reply_markup=kb)
+
+@router.callback_query(F.data.startswith("astud_save_lvl:"))
+async def astud_save_lvl(callback: CallbackQuery, db: Database):
+    parts = callback.data.split(":")
+    stud_id = int(parts[1])
+    stud_level = parts[2]
+    
+    await db.set_student_level(stud_id, stud_level)
+    await callback.answer(f"O'quvchi darajasi {stud_level} etib belgilandi!", show_alert=True)
+    
+    student = await db.get_user(stud_id)
+    days = student.get('days') or "Noma'lum"
+    bio = student.get('teacher_bio')
+    bio_text = f"\n**📝 Ustoz fikri:** {bio}" if bio else ""
+    
+    level_val = student.get('level', "Noma'lum")
+    student_level_val = student.get('student_level', 'Belgilanmagan')
+    
+    text = f"👤 **O'quvchi ma'lumotlari:**\n\n" \
+           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
+           f"**Yosh:** {student['age']}\n" \
+           f"**Tel:** {student['phone_number']}\n" \
+           f"**Guruh/Daraja:** {level_val}\n" \
+           f"**Kunlar:** {days}\n" \
+           f"**ID:** {student['telegram_id']}\n" \
+           f"**O'quvchi maqomi:** {student_level_val}" \
+           f"{bio_text}"
+           
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📈 Darajani belgilash", callback_data=f"astud_set_lvl:{stud_id}")],
+        [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{stud_id}")],
+        [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{stud_id}")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="astud_list")]
+    ])
+    
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+
+from states.register_states import AdminPersonalMessage
+
+@router.callback_query(F.data.startswith("astud_msg:"))
+async def astud_msg(callback: CallbackQuery, state: FSMContext):
+    stud_id = int(callback.data.split(":")[1])
+    await state.update_data(student_id=stud_id)
+    
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+        resize_keyboard=True
+    )
+    
+    await callback.message.delete()
+    await callback.message.answer("📩 **O'quvchiga yuboriladigan xabarni kiriting:**\n(Bekor qilish uchun '⬅️ Orqaga' ni bosing)", parse_mode="Markdown", reply_markup=keyboard)
+    await state.set_state(AdminPersonalMessage.waiting_for_message)
+
+@router.message(AdminPersonalMessage.waiting_for_message)
+async def process_admin_personal_message(message: Message, state: FSMContext, db: Database):
+    if message.text == "⬅️ Orqaga":
+        await state.clear()
+        from handlers.student import get_user_keyboard
+        await message.answer("Amal bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
+        return
+        
+    data = await state.get_data()
+    stud_id = data.get('student_id')
+    
+    try:
+        await message.bot.send_message(
+            chat_id=stud_id,
+            text=f"👨‍🏫 **Ustozdan shaxsiy xabar:**\n\n{message.text}",
+            parse_mode="Markdown"
+        )
+        await state.clear()
+        from handlers.student import get_user_keyboard
+        await message.answer("✅ Xabar o'quvchiga muvaffaqiyatli yuborildi!", reply_markup=get_user_keyboard(message.from_user.id))
+    except Exception as e:
+        await message.answer(f"❌ Xabar yuborishda xatolik yuz berdi. Balki o'quvchi botni bloklagan bo'lishi mumkin.\nSabab: {e}")
+
+from states.register_states import AdminSetBio
+
+@router.callback_query(F.data.startswith("astud_bio:"))
+async def astud_bio(callback: CallbackQuery, state: FSMContext):
+    stud_id = int(callback.data.split(":")[1])
+    await state.update_data(student_id=stud_id)
+    
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+        resize_keyboard=True
+    )
+    
+    await callback.message.delete()
+    await callback.message.answer(
+        "📝 **O'quvchi uchun qisqacha ustoz fikrini (bio) kiriting (max 100-150 harf):**\n\n"
+        "*(Ushbu fikr o'quvchi botga har safar kirganida ko'rinib turadi. Bekor qilish uchun '⬅️ Orqaga' ni bosing)*",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+    await state.set_state(AdminSetBio.waiting_for_bio)
+
+@router.message(AdminSetBio.waiting_for_bio)
+async def process_admin_set_bio(message: Message, state: FSMContext, db: Database):
+    if message.text == "⬅️ Orqaga":
+        await state.clear()
+        from handlers.student import get_user_keyboard
+        await message.answer("Amal bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
+        return
+        
+    bio_text = message.text[:250] # Enforce safety length limit
+    data = await state.get_data()
+    stud_id = data.get('student_id')
+    
+    await db.set_teacher_bio(stud_id, bio_text)
+    
+    try:
+        await message.bot.send_message(
+            chat_id=stud_id,
+            text=f"💡 **Ustozingiz profilingizni yangiladi va sizga maslahat qoldirdi!**\n\n"
+                 f"\"{bio_text}\"\n\n"
+                 f"_(Buni har doim botga kirganda ko'rasiz)_",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        pass # Ignore if student blocked bot
+        
+    await state.clear()
+    from handlers.student import get_user_keyboard
+    await message.answer("✅ Ustoz fikri saqlandi va o'quvchiga yuborildi!", reply_markup=get_user_keyboard(message.from_user.id))
