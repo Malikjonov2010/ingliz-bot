@@ -31,4 +31,6 @@ Bizning rasmiy sahifalarimiz, foydali ma'lumotlar berib boriladigan kanallarimiz
 - Ustoz sizga qoldirgan har qanday fikr (maslahat yoki ogohlantirish) profilinizda ko'rinib turadi, unga amal qilishga harakat qiling.
 
 *O'qishlaringizda omad tilaymiz! Ingliz tilini biz bilan tez va oson o'rganing!*
+
+**Developer & Admin2 @Malikjonov_s**
 """

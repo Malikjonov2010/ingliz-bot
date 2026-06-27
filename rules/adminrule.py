@@ -30,4 +30,6 @@ Yangi guruh ochish (masalan: "Beginner 101", "IELTS 02") va unga kunlar, vaqtlar
 - Hammaga xabar yuborish tugmasidan juda ko'p foydalanmang, aks holda Telegram botni spam deb o'ylashi mumkin.
 
 *Botdan unumli foydalaning va ishlaringizda omad tilaymiz!*
+
+**Developer & Admin2 @Malikjonov_s**
 """
