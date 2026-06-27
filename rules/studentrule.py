@@ -32,5 +32,5 @@ Bizning rasmiy sahifalarimiz, foydali ma'lumotlar berib boriladigan kanallarimiz
 
 *O'qishlaringizda omad tilaymiz! Ingliz tilini biz bilan tez va oson o'rganing!*
 
-**Developer & Admin2 @Malikjonov_s**
+**Developer & Admin2 @Malikjonov\_s**
 """

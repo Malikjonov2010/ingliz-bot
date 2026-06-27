@@ -31,5 +31,5 @@ Yangi guruh ochish (masalan: "Beginner 101", "IELTS 02") va unga kunlar, vaqtlar
 
 *Botdan unumli foydalaning va ishlaringizda omad tilaymiz!*
 
-**Developer & Admin2 @Malikjonov_s**
+**Developer & Admin2 @Malikjonov\_s**
 """
