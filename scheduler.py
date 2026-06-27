@@ -38,16 +38,25 @@ async def check_schedules(bot, db):
                            f"Sizning **{group_name}** guruhingiz uchun dars boshlandi.\n"
                            f"Darsni o'tib bo'lgach, iltimos o'quvchilarning davomatini va dars o'zlashtirish ballarini belgilashni unutmang!")
                     
+                    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                    
+                    # Create inline button for easy grading
+                    # Note: Telegram callback_data limit is 64 bytes, ensure group_name is not too long
+                    safe_group_name = group_name[:40] if group_name else ""
+                    kb = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="📝 O'quvchilarga ball qo'yish", callback_data=f"score_list:{safe_group_name}")]
+                    ])
+                    
                     # Send to teacher if exists, else send to all admins
                     if teacher_id:
                         try:
-                            await bot.send_message(teacher_id, msg, parse_mode="Markdown")
+                            await bot.send_message(teacher_id, msg, parse_mode="Markdown", reply_markup=kb)
                         except Exception as e:
                             logging.error(f"Failed to send schedule to teacher {teacher_id}: {e}")
                     else:
                         for admin_id in ADMIN_IDS:
                             try:
-                                await bot.send_message(admin_id, msg, parse_mode="Markdown")
+                                await bot.send_message(admin_id, msg, parse_mode="Markdown", reply_markup=kb)
                             except Exception as e:
                                 pass
                                 
