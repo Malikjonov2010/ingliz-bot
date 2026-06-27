@@ -29,3 +29,6 @@ class AdminStudentLevel(StatesGroup):
 
 class StudentAttendance(StatesGroup):
     waiting_for_absence_reason = State()
+
+class TeacherMessage(StatesGroup):
+    waiting_for_message = State()

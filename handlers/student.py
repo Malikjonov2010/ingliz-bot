@@ -4,7 +4,7 @@ from datetime import date
 from database.db import Database
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from states.register_states import Deletion, StudentAttendance
+from states.register_states import Deletion, StudentAttendance, TeacherMessage
 from config import ADMIN_IDS
 import json
 
@@ -207,7 +207,30 @@ async def show_student_level(message: Message, db: Database):
 
 @router.message(F.text == "📩 Ustozga xabar yuborish", StateFilter(None))
 async def msg_teacher(message: Message):
-    await message.answer("Ustozingizga xabar yubormoqchi bo'lsangiz, ushbu manzilga yozing:\n👉 @Muhammaddiyor_courses_admin")
+    text = (
+        "Ustozga xabar yuborishdan avval, quyidagi kanal, guruh va botlarga obuna bo'lishingiz shart:\n\n"
+        "Obuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎓 Super Teaching", url="https://t.me/superteaching"),
+                InlineKeyboardButton(text="📝 Muhammaddiyor Blog", url="https://t.me/Muhammaddiyor_blog")
+            ],
+            [
+                InlineKeyboardButton(text="🤖 Bomb Kinolar Bot", url="https://t.me/tarjimabombakinolar_bot"),
+                InlineKeyboardButton(text="🤖 Epic Kinolar Bot", url="https://t.me/tarjimaepickinolarbot")
+            ],
+            [
+                InlineKeyboardButton(text="🎬 Bomb Kinolar", url="https://t.me/Tarjimabombakinolar"),
+                InlineKeyboardButton(text="🔥 Epic Brand", url="https://t.me/Epic_brand")
+            ],
+            [
+                InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="check_teacher_sub")
+            ]
+        ]
+    )
+    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
 
 @router.message(F.text == "📢 Kanal va guruhlar", StateFilter(None))
 async def channels_info(message: Message):
@@ -301,3 +324,67 @@ async def process_deletion_code(message: Message, state: FSMContext, db: Databas
         await state.clear()
     else:
         await message.answer("Noto'g'ri kod. Iltimos, qayta urunib ko'ring yoki /start ni bosing.")
+
+@router.callback_query(F.data == "check_teacher_sub")
+async def process_teacher_sub(callback: CallbackQuery, state: FSMContext, db: Database):
+    user_id = callback.from_user.id
+    bot = callback.bot
+    channels_to_check = [
+        "@superteaching",
+        "@Muhammaddiyor_blog",
+        "@Tarjimabombakinolar",
+        "@Epic_brand"
+    ]
+    
+    not_subscribed = False
+    for channel in channels_to_check:
+        try:
+            member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status in ['left', 'kicked']:
+                not_subscribed = True
+                break
+        except Exception:
+            # Assume subscribed if bot cannot check
+            pass
+            
+    if not_subscribed:
+        await callback.answer("❌ Avval barcha kanal va guruhlarga obuna bo'ling!", show_alert=True)
+    else:
+        await callback.message.delete()
+        await state.set_state(TeacherMessage.waiting_for_message)
+        
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+            resize_keyboard=True
+        )
+        await callback.message.answer("📝 Ustozga nima demoqchisiz, yozing:", reply_markup=keyboard)
+
+@router.message(TeacherMessage.waiting_for_message)
+async def process_teacher_message(message: Message, state: FSMContext, db: Database):
+    text = message.text.strip() if message.text else ""
+    
+    if text == "⬅️ Orqaga":
+        await state.clear()
+        keyboard = get_student_keyboard()
+        await message.answer("Bosh menyuga qaytdingiz.", reply_markup=keyboard)
+        return
+
+    if not text or text.startswith('/'):
+        await message.answer("⚠️ Iltimos, faqat matnli xabar yuboring.")
+        return
+        
+    user = await db.get_user(message.from_user.id)
+    name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else message.from_user.full_name
+    
+    admin_text = f"📩 **Ustozga yangi xabar:**\n\n" \
+                 f"👤 **O'quvchi:** {name}\n" \
+                 f"💬 **Xabar:**\n{text}"
+                 
+    from utils import notify_admins_async
+    import asyncio
+    asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS, parse_mode="Markdown"))
+    
+    await state.clear()
+    keyboard = get_student_keyboard()
+    await message.answer("✅ Xabaringiz ustozga yuborildi. Rahmat!", reply_markup=keyboard)
+
