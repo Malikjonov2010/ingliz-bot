@@ -72,7 +72,7 @@ class Database:
             await connection.execute(query, telegram_id, status)
             
     async def get_all_groups(self) -> List[asyncpg.Record]:
-        query = "SELECT id, name, days, time, group_level FROM groups ORDER BY id ASC"
+        query = "SELECT id, name, days, time, group_level, teacher_id FROM groups ORDER BY id ASC"
         async with self.pool.acquire() as connection:
             return await connection.fetch(query)
             
@@ -186,7 +186,7 @@ class Database:
             
             attendance_count = await connection.fetchval("SELECT COUNT(*) FROM attendance WHERE user_id = $1 AND is_present = TRUE", user_id) or 0
             
-            user_info = await connection.fetchrow("SELECT student_level, teacher_bio FROM users WHERE telegram_id = $1", user_id)
+            user_info = await connection.fetchrow("SELECT student_level, teacher_bio, performance_grade FROM users WHERE telegram_id = $1", user_id)
             
             return {
                 "last_score": last_score,
@@ -195,8 +195,14 @@ class Database:
                 "current_cycle_scores": current_cycle_scores,
                 "attendance_count": attendance_count,
                 "student_level": user_info['student_level'] if user_info else None,
-                "teacher_bio": user_info['teacher_bio'] if user_info else None
+                "teacher_bio": user_info['teacher_bio'] if user_info else None,
+                "performance_grade": user_info['performance_grade'] if user_info else None
             }
+
+    async def set_performance_grade(self, user_id: int, grade: str) -> None:
+        query = "UPDATE users SET performance_grade = $2 WHERE telegram_id = $1"
+        async with self.pool.acquire() as connection:
+            await connection.execute(query, user_id, grade)
 
     async def update_teacher_bio(self, user_id: int, bio: str) -> None:
         query = "UPDATE users SET teacher_bio = $2 WHERE telegram_id = $1"

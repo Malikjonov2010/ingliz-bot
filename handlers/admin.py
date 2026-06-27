@@ -443,8 +443,34 @@ async def process_astud_save_lvl(callback: CallbackQuery, db: Database):
     student_id = int(parts[1])
     new_lvl = parts[2]
     
-    await db.set_student_level(student_id, new_lvl)
+    await db.set_performance_grade(student_id, new_lvl)
     await callback.answer(f"Daraja {new_lvl} ga o'zgartirildi!", show_alert=True)
+    await callback.message.delete()
+
+@router.callback_query(F.data.startswith("astud_eng_lvl:"))
+async def process_astud_eng_lvl(callback: CallbackQuery):
+    student_id = int(callback.data.split(":")[1])
+    
+    levels = [
+        "SUPPORT", "CAPTAIN", "MAIN", "LEARNER", "INTRODUCTORY"
+    ]
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=lvl, callback_data=f"astud_save_eng_lvl:{student_id}:{lvl}")] for lvl in levels
+    ])
+    kb.inline_keyboard.append([InlineKeyboardButton(text="🔙 Bekor qilish", callback_data="cancel_astud_edit")])
+    
+    await callback.message.answer("🎓 O'quvchining Ingliz tili darajasini belgilang:", reply_markup=kb)
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("astud_save_eng_lvl:"))
+async def process_astud_save_eng_lvl(callback: CallbackQuery, db: Database):
+    parts = callback.data.split(":")
+    student_id = int(parts[1])
+    new_lvl = parts[2]
+    
+    await db.set_student_level(student_id, new_lvl)
+    await callback.answer(f"Ingliz tili darajasi {new_lvl} ga o'zgartirildi!", show_alert=True)
     await callback.message.delete()
 
 @router.callback_query(F.data.startswith("astud_bio:"))

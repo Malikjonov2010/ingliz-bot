@@ -58,7 +58,8 @@ def get_student_profile_text(student: dict, page_info: str = "") -> str:
 def get_student_profile_keyboard(student_id: int, back_callback_data: str = "astud_list", extra_buttons=None):
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     buttons = [
-        [InlineKeyboardButton(text="📈 Darajani belgilash", callback_data=f"astud_set_lvl:{student_id}")],
+        [InlineKeyboardButton(text="🎓 Ingliz tili darajasi", callback_data=f"astud_eng_lvl:{student_id}")],
+        [InlineKeyboardButton(text="📊 O'zlashtirish qo'yish", callback_data=f"astud_set_lvl:{student_id}")],
         [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{student_id}")],
         [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{student_id}")]
     ]

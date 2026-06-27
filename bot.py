@@ -61,6 +61,8 @@ async def main():
         logging.info(f"Dummy web server started on port {port} for Render.")
 
     try:
+        from scheduler import start_scheduler
+        start_scheduler(bot, db)
         await dp.start_polling(bot)
     finally:
         await db.disconnect()

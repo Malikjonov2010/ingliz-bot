@@ -215,11 +215,12 @@ async def show_detailed_dashboard(message: Message, db: Database):
     current_cycle_scores = stats.get('current_cycle_scores', [])
     attendance_count = stats.get('attendance_count', 0)
     current_cycle_total = stats['current_cycle_total']
-    student_level = stats.get('student_level')
+    student_level = stats.get('student_level') or "Belgilanmagan"
+    performance_grade = stats.get('performance_grade')
     teacher_bio = stats.get('teacher_bio')
     
-    if student_level:
-        grade = student_level
+    if performance_grade:
+        grade = performance_grade
     else:
         if 140 <= current_cycle_total <= 150:
             grade = "Excellent 🥇"
@@ -243,12 +244,13 @@ async def show_detailed_dashboard(message: Message, db: Database):
 
     text = f"""📈 **Darslar o'zlashtirishim**
 ━━━━━━━━━━━━━━━━━━
+🎓 **Ingliz tili darajangiz:** {student_level}
 🚶‍♂️ Jami kelgan darslaringiz: {attendance_count} marta
 
 📊 **Joriy oy (sikl) ballari:**
 {scores_text}
 📌 **Jami:** {current_cycle_total}/150
-🏅 **Daraja:** {grade}
+🏅 **O'zlashtirish:** {grade}
 {bio_text}"""
     
     await message.answer(text, parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
