@@ -1,19 +1,16 @@
-import asyncio
-import os
-import asyncpg
+import asyncio, os
+from database.db import Database
 from dotenv import load_dotenv
 
-load_dotenv('.env')
+load_dotenv()
 
-async def run():
-    conn = await asyncpg.connect(os.getenv('DATABASE_URL'))
+async def test():
+    db = Database(os.getenv('DATABASE_URL'))
+    await db.connect()
     try:
-        await conn.execute('ALTER TABLE attendance ADD UNIQUE (user_id, date);')
-        print("Unique constraint added.")
+        res = await db.create_group('test2', 'mon', '12', 123)
+        print('ok', res)
     except Exception as e:
-        print("Error adding constraint:", e)
-    finally:
-        await conn.close()
+        print(f"Error: {e}")
 
-if __name__ == '__main__':
-    asyncio.run(run())
+asyncio.run(test())

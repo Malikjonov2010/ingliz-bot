@@ -81,17 +81,20 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
     time = message.text
     edit_id = data.get('edit_group_id')
     
-    if edit_id:
-        group = await db.get_group(edit_id)
-        old_name = group['name']
-        async with db.pool.acquire() as connection:
-            await connection.execute("UPDATE users SET level = $1 WHERE level = $2", name, old_name)
-            
-        await db.update_group(edit_id, name, days, time)
-        await message.answer(f"✅ Guruh muvaffaqiyatli yangilandi!\nNomi: {name}\nKunlari: {days}\nVaqti: {time}")
-    else:
-        await db.create_group(name, days, time, message.from_user.id)
-        await message.answer(f"✅ Yangi guruh qo'shildi!\nNomi: {name}\nKunlari: {days}\nVaqti: {time}")
+    try:
+        if edit_id:
+            group = await db.get_group(edit_id)
+            old_name = group['name']
+            async with db.pool.acquire() as connection:
+                await connection.execute("UPDATE users SET level = $1 WHERE level = $2", name, old_name)
+                
+            await db.update_group(edit_id, name, days, time)
+            await message.answer(f"✅ Guruh muvaffaqiyatli yangilandi!\nNomi: {name}\nKunlari: {days}\nVaqti: {time}")
+        else:
+            await db.create_group(name, days, time, message.from_user.id)
+            await message.answer(f"✅ Yangi guruh qo'shildi!\nNomi: {name}\nKunlari: {days}\nVaqti: {time}")
+    except Exception as e:
+        await message.answer(f"❌ Xatolik yuz berdi: {e}\nIltimos, qaytadan urinib ko'ring yoki adminga murojaat qiling.")
         
     await state.clear()
 

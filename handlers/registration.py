@@ -12,6 +12,7 @@ router = Router()
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, db: Database):
+    await state.clear()
     user = await db.get_user(message.from_user.id)
     if user:
         if user['status'] == 'active':

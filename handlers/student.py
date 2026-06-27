@@ -473,3 +473,11 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     keyboard = get_user_keyboard(message.from_user.id)
     await message.answer("✅ Xabaringiz ustozga yuborildi. Rahmat!", reply_markup=keyboard)
 
+
+@router.message()
+async def catch_all_messages(message: Message, state: FSMContext, db: Database):
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("⚠️ Kechirasiz, men bu xabarni tushunmadim. Iltimos, menyudagi tugmalardan foydalaning.")
+    else:
+        await message.answer("⚠️ Noto'g'ri buyruq yoki format. Bekor qilish uchun /start ni bosing.")
