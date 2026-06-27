@@ -15,7 +15,8 @@ def get_user_keyboard(user_id: int):
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")],
-                [KeyboardButton(text="👤 O'quvchilarni ko'rish"), KeyboardButton(text="🏫 Guruhlarni boshqarish")]
+                [KeyboardButton(text="👤 O'quvchilarni ko'rish"), KeyboardButton(text="🏫 Guruhlarni boshqarish")],
+                [KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
             ],
             resize_keyboard=True
         )
@@ -23,8 +24,9 @@ def get_user_keyboard(user_id: int):
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
-                [KeyboardButton(text="🎓 O'zini guruhini darajasi"), KeyboardButton(text="🏆 O'zini darajasini ko'rish")],
-                [KeyboardButton(text="📩 Ustozga xabar yuborish"), KeyboardButton(text="📢 Kanal va guruhlar")]
+                [KeyboardButton(text="🎓 Sizning guruh darajangiz"), KeyboardButton(text="🏆 O'zingizni darajangiz")],
+                [KeyboardButton(text="📩 Ustozga xabar yuborish"), KeyboardButton(text="📢 Kanal va guruhlar")],
+                [KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
             ],
             resize_keyboard=True
         )
@@ -181,7 +183,7 @@ async def show_dashboard(message: Message, db: Database):
     
     await message.answer(dashboard, parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
 
-@router.message(F.text == "🎓 O'zini guruhini darajasi", StateFilter(None))
+@router.message(F.text == "🎓 Sizning guruh darajangiz", StateFilter(None))
 async def show_group_level(message: Message, db: Database):
     user = await db.get_user(message.from_user.id)
     if not user or user['status'] != 'active':
@@ -234,7 +236,7 @@ async def show_group_level(message: Message, db: Database):
     )
     await message.answer(text, parse_mode="HTML")
 
-@router.message(F.text == "🏆 O'zini darajasini ko'rish", StateFilter(None))
+@router.message(F.text == "🏆 O'zingizni darajangiz", StateFilter(None))
 async def show_student_level(message: Message, db: Database):
     user = await db.get_user(message.from_user.id)
     if not user or user['status'] != 'active':
@@ -285,6 +287,8 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
     channels = [
         ("🎓 Super Teaching", "https://t.me/superteaching", "@superteaching"),
         ("📝 Muhammaddiyor Blog", "https://t.me/Muhammaddiyor_blog", "@Muhammaddiyor_blog"),
+        ("🤖 Bomb Kinolar Bot", "https://t.me/tarjimabombakinolar_bot", "@tarjimabombakinolar_bot"),
+        ("🤖 Epic Kinolar Bot", "https://t.me/tarjimaepickinolarbot", "@tarjimaepickinolarbot"),
         ("🎬 Bomb Kinolar", "https://t.me/Tarjimabombakinolar", "@Tarjimabombakinolar"),
         ("🔥 Epic Brand", "https://t.me/Epic_brand", "@Epic_brand")
     ]
@@ -418,6 +422,8 @@ async def process_teacher_sub(callback: CallbackQuery, state: FSMContext, db: Da
     channels_to_check = [
         "@superteaching",
         "@Muhammaddiyor_blog",
+        "@tarjimabombakinolar_bot",
+        "@tarjimaepickinolarbot",
         "@Tarjimabombakinolar",
         "@Epic_brand"
     ]
@@ -430,8 +436,7 @@ async def process_teacher_sub(callback: CallbackQuery, state: FSMContext, db: Da
                 not_subscribed = True
                 break
         except Exception:
-            not_subscribed = True
-            break
+            pass
             
     if not_subscribed:
         await callback.answer("❌ Kechirasiz, siz hali barcha kerakli kanal va guruhlarga obuna bo'lmagansiz. Iltimos, barchasiga obuna bo'ling!", show_alert=True)
@@ -477,6 +482,11 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     keyboard = get_user_keyboard(message.from_user.id)
     await message.answer("✅ Xabaringiz ustozga yuborildi. Rahmat!", reply_markup=keyboard)
 
+
+@router.message(F.text == "🤖 Bot qoidalari va foydalanish", StateFilter(None))
+async def show_student_rules(message: Message):
+    from rules.studentrule import STUDENT_RULES_TEXT
+    await message.answer(STUDENT_RULES_TEXT, parse_mode="Markdown")
 
 @router.message()
 async def catch_all_messages(message: Message, state: FSMContext, db: Database):
