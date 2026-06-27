@@ -193,7 +193,25 @@ class Database:
             await connection.execute(query, group_id, level)
 
     async def set_student_level(self, user_id: int, level: str) -> None:
-        query = "UPDATE users SET student_level = $2 WHERE telegram_id = $1"
+        query = "UPDATE users SET student_level = $2, student_level_updated_at = CURRENT_TIMESTAMP WHERE telegram_id = $1"
+        async with self.pool.acquire() as connection:
+            await connection.execute(query, user_id, level)
+
+    async def can_send_teacher_message(self, user_id: int) -> bool:
+        from datetime import date
+        query = "SELECT COUNT(*) FROM teacher_message_logs WHERE user_id = $1 AND date = $2"
+        async with self.pool.acquire() as connection:
+            count = await connection.fetchval(query, user_id, date.today())
+            return count < 3
+
+    async def log_teacher_message(self, user_id: int) -> None:
+        from datetime import date
+        query = "INSERT INTO teacher_message_logs (user_id, date) VALUES ($1, $2)"
+        async with self.pool.acquire() as connection:
+            await connection.execute(query, user_id, date.today())
+
+    async def set_student_level(self, user_id: int, level: str) -> None:
+        query = "UPDATE users SET student_level = $2, student_level_updated_at = CURRENT_TIMESTAMP WHERE telegram_id = $1"
         async with self.pool.acquire() as connection:
             await connection.execute(query, user_id, level)
 

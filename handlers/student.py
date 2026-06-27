@@ -193,13 +193,24 @@ async def show_group_level(message: Message, db: Database):
         
     async with db.pool.acquire() as connection:
         try:
-            status = await connection.fetchval("SELECT status FROM level_status WHERE level_name = $1", level)
+            status_row = await connection.fetchrow("SELECT status, updated_at FROM level_status WHERE level_name = $1", level)
+            status = status_row['status'] if status_row else None
+            updated_at = status_row['updated_at'] if status_row else None
         except Exception:
             status = None
+            updated_at = None
             
     g_level = status or "Hali belgilanmagan"
     
-    await message.answer(f"🏫 **Guruh (Daraja):** {level}\n📈 **Guruh darajasi:** {g_level}")
+    if updated_at:
+        from pytz import timezone
+        uz_tz = timezone('Asia/Tashkent')
+        time_str = updated_at.astimezone(uz_tz).strftime('%d.%m.%Y %H:%M')
+        time_msg = f"\n\n🕒 **O'zgargan vaqti:** `{time_str}`"
+    else:
+        time_msg = ""
+    
+    await message.answer(f"🏫 **Guruh (Daraja):** {level}\n📈 **Guruh darajasi:** {g_level}{time_msg}")
 
 @router.message(F.text == "🏆 O'zini darajasini ko'rish", StateFilter(None))
 async def show_student_level(message: Message, db: Database):
@@ -208,34 +219,59 @@ async def show_student_level(message: Message, db: Database):
         return
         
     s_level = user.get('student_level') or "Hali belgilanmagan"
-    await message.answer(f"🏅 **Sizning shaxsiy darajangiz:** {s_level}\n\nO'qituvchi tomonidan belgilangan baholash.")
+    updated_at = user.get('student_level_updated_at')
+    
+    if updated_at:
+        from pytz import timezone
+        uz_tz = timezone('Asia/Tashkent')
+        time_str = updated_at.astimezone(uz_tz).strftime('%d.%m.%Y %H:%M')
+        time_msg = f"\n\n🕒 **O'zgargan vaqti:** `{time_str}`"
+    else:
+        time_msg = ""
+        
+    await message.answer(f"🏅 **Sizning shaxsiy darajangiz:**\n\n💎 **{s_level}** 💎\n\nO'qituvchi tomonidan belgilangan baholash.{time_msg}")
 
 @router.message(F.text == "📩 Ustozga xabar yuborish", StateFilter(None))
-async def msg_teacher(message: Message):
-    text = (
-        "Ustozga xabar yuborishdan avval, quyidagi kanal, guruh va botlarga obuna bo'lishingiz shart:\n\n"
-        "Obuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
-    )
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="🎓 Super Teaching", url="https://t.me/superteaching"),
-                InlineKeyboardButton(text="📝 Muhammaddiyor Blog", url="https://t.me/Muhammaddiyor_blog")
-            ],
-            [
-                InlineKeyboardButton(text="🤖 Bomb Kinolar Bot", url="https://t.me/tarjimabombakinolar_bot"),
-                InlineKeyboardButton(text="🤖 Epic Kinolar Bot", url="https://t.me/tarjimaepickinolarbot")
-            ],
-            [
-                InlineKeyboardButton(text="🎬 Bomb Kinolar", url="https://t.me/Tarjimabombakinolar"),
-                InlineKeyboardButton(text="🔥 Epic Brand", url="https://t.me/Epic_brand")
-            ],
-            [
-                InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="check_teacher_sub")
-            ]
-        ]
-    )
-    await message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
+async def msg_teacher(message: Message, db: Database, state: FSMContext):
+    if not await db.can_send_teacher_message(message.from_user.id):
+        await message.answer("🚫 Kechirasiz, siz bugun ustozga 3 marta xabar yuborib bo'ldingiz.\nErtaga yana urinib ko'ring!")
+        return
+
+    bot = message.bot
+    user_id = message.from_user.id
+    
+    channels = [
+        ("🎓 Super Teaching", "https://t.me/superteaching", "@superteaching"),
+        ("📝 Muhammaddiyor Blog", "https://t.me/Muhammaddiyor_blog", "@Muhammaddiyor_blog"),
+        ("🎬 Bomb Kinolar", "https://t.me/Tarjimabombakinolar", "@Tarjimabombakinolar"),
+        ("🔥 Epic Brand", "https://t.me/Epic_brand", "@Epic_brand")
+    ]
+    
+    unsubbed_buttons = []
+    for name, url, username in channels:
+        try:
+            member = await bot.get_chat_member(chat_id=username, user_id=user_id)
+            if member.status in ['left', 'kicked']:
+                unsubbed_buttons.append(InlineKeyboardButton(text=name, url=url))
+        except Exception:
+            unsubbed_buttons.append(InlineKeyboardButton(text=name, url=url))
+            
+    if unsubbed_buttons:
+        # Group buttons into pairs
+        kb_rows = [unsubbed_buttons[i:i+2] for i in range(0, len(unsubbed_buttons), 2)]
+        kb_rows.append([InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="check_teacher_sub")])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=kb_rows)
+        
+        text = "Ustozga xabar yuborishdan avval, quyidagi kanal va guruhlarga obuna bo'lishingiz shart:\n\nObuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
+        await message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
+    else:
+        # All subbed
+        await state.set_state(TeacherMessage.waiting_for_message)
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+            resize_keyboard=True
+        )
+        await message.answer("📝 Ustozga nima demoqchisiz, yozing:", reply_markup=keyboard)
 
 @router.message(F.text == "📢 Kanal va guruhlar", StateFilter(None))
 async def channels_info(message: Message):
@@ -380,6 +416,8 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
         
     user = await db.get_user(message.from_user.id)
     name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else message.from_user.full_name
+    
+    await db.log_teacher_message(message.from_user.id)
     
     admin_text = f"📩 **Ustozga yangi xabar:**\n\n" \
                  f"👤 **O'quvchi:** {name}\n" \

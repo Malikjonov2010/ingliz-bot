@@ -85,3 +85,19 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
 CREATE INDEX IF NOT EXISTS idx_scores_user ON scores(user_id);
 CREATE INDEX IF NOT EXISTS idx_cycles_user ON cycles(user_id);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS student_level_updated_at TIMESTAMP WITH TIME ZONE;
+
+CREATE TABLE IF NOT EXISTS level_status (
+    level_name VARCHAR(50) PRIMARY KEY,
+    status VARCHAR(50),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE level_status ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS teacher_message_logs (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+    date DATE NOT NULL DEFAULT CURRENT_DATE
+);
