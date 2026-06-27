@@ -234,9 +234,23 @@ async def show_student_level(message: Message, db: Database):
     else:
         time_msg = ""
         
+    level_emojis = {
+        "SUPPORT": "💎",
+        "CAPTAIN": "👑",
+        "MAIN": "🎯",
+        "LEARNER": "📖",
+        "INTRODUCTORY": "🌱"
+    }
+    emoji = level_emojis.get(s_level, "🏅")
+    
+    if s_level == "Hali belgilanmagan":
+        level_display = f"<b>{s_level}</b>"
+    else:
+        level_display = f"{emoji} <b>{s_level}</b> {emoji}"
+        
     text = (
         f"🏅 <b>Sizning shaxsiy darajangiz:</b>\n\n"
-        f"💎 <b>{s_level}</b> 💎\n\n"
+        f"{level_display}\n\n"
         f"<i>O'qituvchi tomonidan belgilangan baholash.</i>"
         f"{time_msg}"
     )
