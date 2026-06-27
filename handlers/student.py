@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove, CallbackQuery
-from datetime import date
+from datetime import date, datetime
 from database.db import Database
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -24,9 +24,9 @@ def get_user_keyboard(user_id: int):
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
-                [KeyboardButton(text="🎓 Sizning guruh darajangiz"), KeyboardButton(text="🏆 O'zingizni darajangiz")],
-                [KeyboardButton(text="📩 Ustozga xabar yuborish"), KeyboardButton(text="📢 Kanal va guruhlar")],
-                [KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
+                [KeyboardButton(text="📈 Darslar o'zlashtirishim"), KeyboardButton(text="🎓 Sizning guruh darajangiz")],
+                [KeyboardButton(text="🏆 O'zingizni darajangiz"), KeyboardButton(text="📩 Ustozga xabar yuborish")],
+                [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
             ],
             resize_keyboard=True
         )
@@ -90,7 +90,23 @@ async def process_attendance_present(callback: CallbackQuery, db: Database):
         return
         
     success, msg = await db.mark_attendance(user_id, today_date, is_present=True)
-    await callback.message.edit_text("✅ Bugungi darsga kelganingiz tasdiqlandi. Rahmat!")
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    await callback.message.edit_text(f"✅ Bugungi darsga kelganingiz tasdiqlandi.\n📅 Vaqt: {current_time}\nHolat: Kelgan")
+    
+    user = await db.get_user(user_id)
+    if user:
+        profile_url = f"tg://user?id={user_id}"
+        admin_text = f"🟢 **Kelgan O'quvchi**\n\n" \
+                     f"👤 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n" \
+                     f"📞 **Raqam:** {user['phone_number']}\n" \
+                     f"🆔 **ID:** `{user_id}`\n" \
+                     f"📚 **Guruh (Kurs):** {user['level'] or 'Belgilanmagan'}\n" \
+                     f"📅 **Vaqt:** {current_time}\n" \
+                     f"✅ **Holat:** Kelgan"
+                     
+        import asyncio
+        from utils import notify_admins_async
+        asyncio.create_task(notify_admins_async(callback.bot, admin_text, ADMIN_IDS))
 
 @router.callback_query(F.data == "attendance_absent")
 async def process_attendance_absent(callback: CallbackQuery, state: FSMContext, db: Database):
@@ -138,19 +154,22 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
         return
         
     # Notify admins asynchronously
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     profile_url = f"tg://user?id={user_id}"
     admin_text = f"🔴 **Kelmagan O'quvchi**\n\n" \
                  f"👤 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n" \
                  f"📞 **Raqam:** {user['phone_number']}\n" \
                  f"🆔 **ID:** `{user_id}`\n" \
                  f"📚 **Guruh (Kurs):** {user['level'] or 'Belgilanmagan'}\n" \
-                 f"📝 **Kelmaslik sababi:** {reason}"
+                 f"📅 **Vaqt:** {current_time}\n" \
+                 f"❌ **Holat:** Kelmagan\n" \
+                 f"📝 **Sababi:** {reason}"
                  
     import asyncio
     from utils import notify_admins_async
     asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS))
             
-    await message.answer("✅ Sababi adminga yuborildi. Rahmat!", reply_markup=get_user_keyboard(message.from_user.id))
+    await message.answer(f"✅ Sababi adminga yuborildi. Rahmat!\n📅 Vaqt: {current_time}\nHolat: Kelmagan", reply_markup=get_user_keyboard(message.from_user.id))
     await state.clear()
 
 @router.message(F.text == "📊 Mening Natijalarim", StateFilter(None))
@@ -182,6 +201,57 @@ async def show_dashboard(message: Message, db: Database):
 {history_text}"""
     
     await message.answer(dashboard, parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
+
+@router.message(F.text == "📈 Darslar o'zlashtirishim", StateFilter(None))
+async def show_detailed_dashboard(message: Message, db: Database):
+    user_id = message.from_user.id
+    user = await db.get_user(user_id)
+    
+    if not user or user['status'] != 'active':
+        await message.answer("⚠️ Sizning hisobingiz faol emas yoki ro'yxatdan o'tmagansiz.")
+        return
+        
+    stats = await db.get_user_stats(user_id)
+    current_cycle_scores = stats.get('current_cycle_scores', [])
+    attendance_count = stats.get('attendance_count', 0)
+    current_cycle_total = stats['current_cycle_total']
+    student_level = stats.get('student_level')
+    teacher_bio = stats.get('teacher_bio')
+    
+    if student_level:
+        grade = student_level
+    else:
+        if 140 <= current_cycle_total <= 150:
+            grade = "Excellent 🥇"
+        elif 120 <= current_cycle_total <= 139:
+            grade = "Very Good 🟢"
+        elif 100 <= current_cycle_total <= 119:
+            grade = "Good 🟡"
+        elif 80 <= current_cycle_total <= 99:
+            grade = "Needs Improvement 🟠"
+        else:
+            grade = "Weak 🔴"
+
+    scores_text = ""
+    if current_cycle_scores:
+        for row in current_cycle_scores:
+            scores_text += f"🔹 {row['lesson_number']}-dars: {row['score']}\n"
+    else:
+        scores_text = "Hali ballar yo'q.\n"
+        
+    bio_text = f"\n💬 **Ustoz sizga aytadigan gapi:**\n_{teacher_bio}_\n" if teacher_bio else ""
+
+    text = f"""📈 **Darslar o'zlashtirishim**
+━━━━━━━━━━━━━━━━━━
+🚶‍♂️ Jami kelgan darslaringiz: {attendance_count} marta
+
+📊 **Joriy oy (sikl) ballari:**
+{scores_text}
+📌 **Jami:** {current_cycle_total}/150
+🏅 **Daraja:** {grade}
+{bio_text}"""
+    
+    await message.answer(text, parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
 
 @router.message(F.text == "🎓 Sizning guruh darajangiz", StateFilter(None))
 async def show_group_level(message: Message, db: Database):

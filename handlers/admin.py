@@ -15,6 +15,9 @@ router = Router()
 class AdminScore(StatesGroup):
     waiting_for_score = State()
 
+class AdminStudentEdit(StatesGroup):
+    waiting_for_bio = State()
+
 @router.callback_query(F.data.startswith("approve_student:"))
 async def approve_student(callback: CallbackQuery, db: Database):
     if callback.from_user.id not in ADMIN_IDS:
@@ -416,3 +419,57 @@ async def process_admin_delete_code(message: Message, state: FSMContext, db: Dat
 async def show_admin_rules(message: Message):
     from rules.adminrule import ADMIN_RULES_TEXT
     await message.answer(ADMIN_RULES_TEXT, parse_mode="Markdown")
+
+@router.callback_query(F.data.startswith("astud_set_lvl:"))
+async def process_astud_set_lvl(callback: CallbackQuery):
+    student_id = int(callback.data.split(":")[1])
+    
+    levels = [
+        "Excellent 🥇", "Very Good 🟢", "Good 🟡", 
+        "Needs Improvement 🟠", "Weak 🔴"
+    ]
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=lvl, callback_data=f"astud_save_lvl:{student_id}:{lvl}")] for lvl in levels
+    ])
+    kb.inline_keyboard.append([InlineKeyboardButton(text="🔙 Bekor qilish", callback_data="cancel_astud_edit")])
+    
+    await callback.message.answer("🎓 O'quvchining joriy darajasini (o'zlashtirishini) belgilang:", reply_markup=kb)
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("astud_save_lvl:"))
+async def process_astud_save_lvl(callback: CallbackQuery, db: Database):
+    parts = callback.data.split(":")
+    student_id = int(parts[1])
+    new_lvl = parts[2]
+    
+    await db.set_student_level(student_id, new_lvl)
+    await callback.answer(f"Daraja {new_lvl} ga o'zgartirildi!", show_alert=True)
+    await callback.message.delete()
+
+@router.callback_query(F.data.startswith("astud_bio:"))
+async def process_astud_bio(callback: CallbackQuery, state: FSMContext):
+    student_id = int(callback.data.split(":")[1])
+    await state.update_data(bio_student_id=student_id)
+    await state.set_state(AdminStudentEdit.waiting_for_bio)
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔙 Bekor qilish", callback_data="cancel_astud_edit")]
+    ])
+    await callback.message.answer("✍️ O'quvchi uchun tafsif (bio/fikr) yozing.\nBu xabar uning o'zlashtirish panelida doimiy turadi:", reply_markup=kb)
+    await callback.answer()
+
+@router.message(AdminStudentEdit.waiting_for_bio)
+async def save_astud_bio(message: Message, state: FSMContext, db: Database):
+    data = await state.get_data()
+    student_id = data.get('bio_student_id')
+    bio = message.text
+    
+    await db.update_teacher_bio(student_id, bio)
+    await message.answer("✅ Ustoz tafsifi muvaffaqiyatli saqlandi!")
+    await state.clear()
+
+@router.callback_query(F.data == "cancel_astud_edit")
+async def cancel_astud_edit(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.delete()

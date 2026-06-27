@@ -176,16 +176,32 @@ class Database:
             last_score_rec = await connection.fetchrow("SELECT score FROM scores WHERE user_id = $1 ORDER BY id DESC LIMIT 1", user_id)
             last_score = last_score_rec['score'] if last_score_rec else 0
             
+            scores_query = "SELECT lesson_number, score FROM scores WHERE user_id = $1 AND id > COALESCE((SELECT MAX(id) FROM scores WHERE user_id = $1 AND lesson_number = 6), 0) ORDER BY lesson_number ASC"
+            current_cycle_scores = await connection.fetch(scores_query, user_id)
+            
             sum_query = "SELECT SUM(score) FROM scores WHERE user_id = $1 AND id > COALESCE((SELECT MAX(id) FROM scores WHERE user_id = $1 AND lesson_number = 6), 0)"
             current_cycle_total = await connection.fetchval(sum_query, user_id) or 0
             
             cycles = await connection.fetch("SELECT cycle_number, total_score, level FROM cycles WHERE user_id = $1 ORDER BY cycle_number DESC", user_id)
             
+            attendance_count = await connection.fetchval("SELECT COUNT(*) FROM attendance WHERE user_id = $1 AND is_present = TRUE", user_id) or 0
+            
+            user_info = await connection.fetchrow("SELECT student_level, teacher_bio FROM users WHERE telegram_id = $1", user_id)
+            
             return {
                 "last_score": last_score,
                 "current_cycle_total": current_cycle_total,
-                "history": cycles
+                "history": cycles,
+                "current_cycle_scores": current_cycle_scores,
+                "attendance_count": attendance_count,
+                "student_level": user_info['student_level'] if user_info else None,
+                "teacher_bio": user_info['teacher_bio'] if user_info else None
             }
+
+    async def update_teacher_bio(self, user_id: int, bio: str) -> None:
+        query = "UPDATE users SET teacher_bio = $2 WHERE telegram_id = $1"
+        async with self.pool.acquire() as connection:
+            await connection.execute(query, user_id, bio)
 
     async def set_deletion_code(self, telegram_id: int, code: str) -> None:
         query = "UPDATE users SET deletion_code = $2 WHERE telegram_id = $1"
