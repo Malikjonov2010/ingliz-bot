@@ -14,10 +14,7 @@ def get_user_keyboard(user_id: int):
     if user_id in ADMIN_IDS:
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")],
-                [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
-                [KeyboardButton(text="🎓 O'zini guruhini darajasi"), KeyboardButton(text="🏆 O'zini darajasini ko'rish")],
-                [KeyboardButton(text="📩 Ustozga xabar yuborish"), KeyboardButton(text="📢 Kanal va guruhlar")]
+                [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")]
             ],
             resize_keyboard=True
         )
