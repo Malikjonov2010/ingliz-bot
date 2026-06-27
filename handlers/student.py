@@ -66,6 +66,7 @@ async def mark_attendance(message: Message, db: Database):
 
 @router.callback_query(F.data == "attendance_present")
 async def process_attendance_present(callback: CallbackQuery, db: Database):
+    await callback.answer()
     user_id = callback.from_user.id
     today_date = date.today()
     
@@ -73,16 +74,16 @@ async def process_attendance_present(callback: CallbackQuery, db: Database):
         exists = await connection.fetchval("SELECT 1 FROM attendance WHERE user_id = $1 AND date = $2", user_id, today_date)
         
     if exists:
-        await callback.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz!", show_alert=True)
         await callback.message.delete()
+        await callback.message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz!")
         return
         
     success, msg = await db.mark_attendance(user_id, today_date, is_present=True)
-    await callback.answer("Rahmat!")
     await callback.message.edit_text("✅ Bugungi darsga kelganingiz tasdiqlandi. Rahmat!")
 
 @router.callback_query(F.data == "attendance_absent")
 async def process_attendance_absent(callback: CallbackQuery, state: FSMContext, db: Database):
+    await callback.answer()
     user_id = callback.from_user.id
     today_date = date.today()
     
@@ -90,11 +91,10 @@ async def process_attendance_absent(callback: CallbackQuery, state: FSMContext, 
         exists = await connection.fetchval("SELECT 1 FROM attendance WHERE user_id = $1 AND date = $2", user_id, today_date)
         
     if exists:
-        await callback.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz!", show_alert=True)
         await callback.message.delete()
+        await callback.message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz!")
         return
         
-    await callback.answer()
     await callback.message.delete()
     
     await callback.message.answer("Nega kelmadingiz? Sababini ayting.", reply_markup=ReplyKeyboardRemove())
