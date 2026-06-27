@@ -10,15 +10,26 @@ import json
 
 router = Router()
 
-def get_student_keyboard():
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
-            [KeyboardButton(text="🎓 O'zini guruhini darajasi"), KeyboardButton(text="🏆 O'zini darajasini ko'rish")],
-            [KeyboardButton(text="📩 Ustozga xabar yuborish"), KeyboardButton(text="📢 Kanal va guruhlar")]
-        ],
-        resize_keyboard=True
-    )
+def get_user_keyboard(user_id: int):
+    if user_id in ADMIN_IDS:
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")],
+                [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
+                [KeyboardButton(text="🎓 O'zini guruhini darajasi"), KeyboardButton(text="🏆 O'zini darajasini ko'rish")],
+                [KeyboardButton(text="📩 Ustozga xabar yuborish"), KeyboardButton(text="📢 Kanal va guruhlar")]
+            ],
+            resize_keyboard=True
+        )
+    else:
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
+                [KeyboardButton(text="🎓 O'zini guruhini darajasi"), KeyboardButton(text="🏆 O'zini darajasini ko'rish")],
+                [KeyboardButton(text="📩 Ustozga xabar yuborish"), KeyboardButton(text="📢 Kanal va guruhlar")]
+            ],
+            resize_keyboard=True
+        )
     return keyboard
 
 @router.message(F.text == "🙋‍♂️ Davomat", StateFilter(None))
@@ -37,7 +48,7 @@ async def mark_attendance(message: Message, db: Database):
         try:
             lesson_days = json.loads(days_json)
             if today_weekday not in lesson_days:
-                await message.answer("⚠️ Siz faqat dars kuningizda davomat belgilay olasiz!", reply_markup=get_student_keyboard())
+                await message.answer("⚠️ Siz faqat dars kuningizda davomat belgilay olasiz!", reply_markup=get_user_keyboard(message.from_user.id))
                 return
         except:
             pass # fallback if not json
@@ -50,7 +61,7 @@ async def mark_attendance(message: Message, db: Database):
         
     if record is not None:
         status_str = "Keldi" if record['is_present'] else f"Kelmadi (Sabab: {record['reason']})"
-        await message.answer(f"❌ Siz bugun davomatdan o'tgansiz!\nHolat: **{status_str}**", parse_mode="Markdown", reply_markup=get_student_keyboard())
+        await message.answer(f"❌ Siz bugun davomatdan o'tgansiz!\nHolat: **{status_str}**", parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
         return
 
     # Show options
@@ -122,7 +133,7 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
     success, msg = await db.mark_attendance(user_id, today_date, is_present=False, reason=reason)
     
     if not success:
-        await message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz.", reply_markup=get_student_keyboard())
+        await message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz.", reply_markup=get_user_keyboard(message.from_user.id))
         await state.clear()
         return
         
@@ -139,7 +150,7 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
     from utils import notify_admins_async
     asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS))
             
-    await message.answer("✅ Sababi adminga yuborildi. Rahmat!", reply_markup=get_student_keyboard())
+    await message.answer("✅ Sababi adminga yuborildi. Rahmat!", reply_markup=get_user_keyboard(message.from_user.id))
     await state.clear()
 
 @router.message(F.text == "📊 Mening Natijalarim", StateFilter(None))
@@ -170,7 +181,7 @@ async def show_dashboard(message: Message, db: Database):
 ━━━━━━━━━━━━━━━━━━
 {history_text}"""
     
-    await message.answer(dashboard, parse_mode="Markdown", reply_markup=get_student_keyboard())
+    await message.answer(dashboard, parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
 
 @router.message(F.text == "🎓 O'zini guruhini darajasi", StateFilter(None))
 async def show_group_level(message: Message, db: Database):
@@ -178,23 +189,20 @@ async def show_group_level(message: Message, db: Database):
     if not user or user['status'] != 'active':
         return
         
-    group_id = user.get('group_id')
-    if not group_id:
-        await message.answer("Siz hali guruhga biriktirilmagansiz. ⏳")
+    level = user.get('level')
+    if not level:
+        await message.answer("Siz hali daraja tanlamagansiz. ⏳")
         return
         
-    # Get group level directly or via a new db method.
     async with db.pool.acquire() as connection:
-        group = await connection.fetchrow("SELECT name, group_level FROM groups WHERE id = $1", group_id)
-        
-    if not group:
-        await message.answer("Guruhingiz topilmadi.")
-        return
-        
-    g_name = group['name']
-    g_level = group['group_level'] or "Hali belgilanmagan"
+        try:
+            status = await connection.fetchval("SELECT status FROM level_status WHERE level_name = $1", level)
+        except Exception:
+            status = None
+            
+    g_level = status or "Hali belgilanmagan"
     
-    await message.answer(f"🏫 **Guruh:** {g_name}\n📈 **Guruh darajasi:** {g_level}")
+    await message.answer(f"🏫 **Guruh (Daraja):** {level}\n📈 **Guruh darajasi:** {g_level}")
 
 @router.message(F.text == "🏆 O'zini darajasini ko'rish", StateFilter(None))
 async def show_student_level(message: Message, db: Database):
@@ -279,7 +287,7 @@ async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
 @router.message(F.text == "⬅️ Orqaga", StateFilter(Deletion.waiting_for_reason, Deletion.waiting_for_code))
 async def cancel_deletion(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("❌ Amaliyot bekor qilindi.", reply_markup=get_student_keyboard())
+    await message.answer("❌ Amaliyot bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
 
 @router.message(Deletion.waiting_for_reason)
 async def process_deletion_reason(message: Message, state: FSMContext, db: Database):
@@ -365,7 +373,7 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     
     if text == "⬅️ Orqaga":
         await state.clear()
-        keyboard = get_student_keyboard()
+        keyboard = get_user_keyboard(message.from_user.id)
         await message.answer("Bosh menyuga qaytdingiz.", reply_markup=keyboard)
         return
 
@@ -385,6 +393,6 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS, parse_mode="Markdown"))
     
     await state.clear()
-    keyboard = get_student_keyboard()
+    keyboard = get_user_keyboard(message.from_user.id)
     await message.answer("✅ Xabaringiz ustozga yuborildi. Rahmat!", reply_markup=keyboard)
 

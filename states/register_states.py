@@ -20,6 +20,7 @@ class AdminGroupCreation(StatesGroup):
 
 class AdminBroadcast(StatesGroup):
     waiting_for_message = State()
+    waiting_for_confirmation = State()
 
 class AdminGroupLevel(StatesGroup):
     waiting_for_level = State()

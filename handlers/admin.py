@@ -7,7 +7,7 @@ from states.register_states import AdminDeletion, Deletion, AdminGroupCreation, 
 from datetime import date
 from database.db import Database
 from config import ADMIN_IDS
-from handlers.student import get_student_keyboard
+from handlers.student import get_user_keyboard
 import asyncio
 
 router = Router()
@@ -30,7 +30,7 @@ async def approve_student(callback: CallbackQuery, db: Database):
         await callback.bot.send_message(
             user_id,
             "🎉 **Tabriklaymiz!** Sizning hisobingiz admin tomonidan tasdiqlandi!\nEndi botdan to'liq foydalanishingiz mumkin.",
-            reply_markup=get_student_keyboard(),
+            reply_markup=get_user_keyboard(message.from_user.id),
             parse_mode="Markdown"
         )
     except Exception:
@@ -70,18 +70,59 @@ async def admin_panel(message: Message, db: Database):
     await message.answer("👨‍🏫 **O'qituvchi Paneli**\nQuyidagilardan birini tanlang:", parse_mode="Markdown", reply_markup=keyboard)
 
 # ================= BROADCAST =================
-@router.callback_query(F.data == "admin_broadcast")
-async def start_broadcast(callback: CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("📢 Barcha faol o'quvchilarga yuboriladigan xabarni kiriting:")
+@router.message(F.text == "📢 Hammaga xabar yuborish", StateFilter(None))
+async def start_broadcast(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+        resize_keyboard=True
+    )
+    await message.answer("📢 Barcha faol o'quvchilarga yuboriladigan xabarni kiriting:", reply_markup=keyboard)
     await state.set_state(AdminBroadcast.waiting_for_message)
 
 @router.message(AdminBroadcast.waiting_for_message)
-async def process_broadcast(message: Message, state: FSMContext, db: Database):
-    users = await db.get_active_users()
-    admin_id = message.from_user.id
+async def process_broadcast(message: Message, state: FSMContext):
     text_to_send = message.text
+    if text_to_send == "⬅️ Orqaga":
+        await state.clear()
+        from handlers.student import get_user_keyboard
+        await message.answer("Bosh menyuga qaytdingiz.", reply_markup=get_user_keyboard(message.from_user.id))
+        return
+
+    await state.update_data(broadcast_msg=text_to_send)
     
-    await message.answer(f"⏳ Xabar {len(users)} ta o'quvchiga fonda yuborilishni boshladi. Botdan bemalol foydalanishingiz mumkin!")
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Ha", callback_data="confirm_broadcast:yes"),
+             InlineKeyboardButton(text="❌ Yo'q", callback_data="confirm_broadcast:no")]
+        ]
+    )
+    
+    await message.answer(f"Shu xabarni jo'natishni tasdiqlaysizmi?\n\n**Xabar:**\n{text_to_send}", reply_markup=keyboard, parse_mode="Markdown")
+    await state.set_state(AdminBroadcast.waiting_for_confirmation)
+
+@router.callback_query(AdminBroadcast.waiting_for_confirmation, F.data.startswith("confirm_broadcast:"))
+async def confirm_broadcast(callback: CallbackQuery, state: FSMContext, db: Database):
+    choice = callback.data.split(":")[1]
+    
+    if choice == "no":
+        await state.clear()
+        from handlers.student import get_user_keyboard
+        await callback.message.delete()
+        await callback.message.answer("❌ Xabar yuborish bekor qilindi.", reply_markup=get_user_keyboard(callback.from_user.id))
+        return
+        
+    data = await state.get_data()
+    text_to_send = data.get("broadcast_msg")
+    
+    users = await db.get_active_users()
+    admin_id = callback.from_user.id
+    
+    await callback.message.delete()
+    from handlers.student import get_user_keyboard
+    await callback.message.answer(f"⏳ Xabar {len(users)} ta o'quvchiga fonda yuborilishni boshladi. Botdan bemalol foydalanishingiz mumkin!", reply_markup=get_user_keyboard(admin_id))
     await state.clear()
     
     import asyncio
@@ -89,194 +130,216 @@ async def process_broadcast(message: Message, state: FSMContext, db: Database):
         count = 0
         for u in users:
             try:
-                await message.bot.send_message(u['telegram_id'], f"📢 **Admindan xabar:**\n\n{text_to_send}", parse_mode="Markdown")
+                await callback.bot.send_message(u['telegram_id'], f"📢 **Admindan xabar:**\n\n{text_to_send}", parse_mode="Markdown")
                 count += 1
                 await asyncio.sleep(0.05) # Prevent rate limits
             except Exception:
                 pass
         
         try:
-            await message.bot.send_message(admin_id, f"✅ Ommaviy xabar {count} ta o'quvchiga muvaffaqiyatli yetkazildi.")
+            await callback.bot.send_message(admin_id, f"✅ Ommaviy xabar {count} ta o'quvchiga muvaffaqiyatli yetkazildi.")
         except Exception:
             pass
             
     asyncio.create_task(run_broadcast())
 
-# ================= SET LEVELS =================
-@router.callback_query(F.data == "admin_set_levels")
-async def admin_set_levels(callback: CallbackQuery, db: Database):
-    groups = await db.get_all_groups()
-    
+# ================= LEVEL & STUDENT MANAGEMENT =================
+@router.message(F.text == "👥 Guruhlar va O'quvchilar", StateFilter(None))
+async def admin_groups_and_students(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    levels = ["Beginner", "Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced", "IELTS", "CEFR"]
     inline_kb = []
-    if groups:
-        inline_kb = [[InlineKeyboardButton(text=g['name'], callback_data=f"setlevel_grp_{g['id']}")] for g in groups]
+    for i in range(0, len(levels), 2):
+        row = [InlineKeyboardButton(text=levels[i], callback_data=f"admin_lvl:{levels[i]}")]
+        if i + 1 < len(levels):
+            row.append(InlineKeyboardButton(text=levels[i+1], callback_data=f"admin_lvl:{levels[i+1]}"))
+        inline_kb.append(row)
         
-    inline_kb.append([InlineKeyboardButton(text="➕ Guruh qo'shish", callback_data="add_group")])
-    inline_kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_admin")])
-    
     keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
-    await callback.message.edit_text("📈 **Guruhlarni darajasini belgilash**\nGuruhni tanlang:", parse_mode="Markdown", reply_markup=keyboard)
+    await message.answer("👥 **Guruhlar va O'quvchilar**\nKerakli darajani tanlang:", parse_mode="Markdown", reply_markup=keyboard)
 
-@router.callback_query(F.data.startswith("setlevel_grp_"))
-async def setlevel_grp(callback: CallbackQuery, db: Database):
-    group_id = int(callback.data.split("_")[2])
-    group_name = await db.get_group_name(group_id)
+@router.callback_query(F.data == "admin_levels_menu")
+async def back_to_levels_menu(callback: CallbackQuery):
+    levels = ["Beginner", "Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced", "IELTS", "CEFR"]
+    inline_kb = []
+    for i in range(0, len(levels), 2):
+        row = [InlineKeyboardButton(text=levels[i], callback_data=f"admin_lvl:{levels[i]}")]
+        if i + 1 < len(levels):
+            row.append(InlineKeyboardButton(text=levels[i+1], callback_data=f"admin_lvl:{levels[i+1]}"))
+        inline_kb.append(row)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
+    await callback.message.edit_text("👥 **Guruhlar va O'quvchilar**\nKerakli darajani tanlang:", parse_mode="Markdown", reply_markup=keyboard)
+
+@router.callback_query(F.data.startswith("admin_lvl:"))
+async def admin_level_menu(callback: CallbackQuery, db: Database):
+    level = callback.data.split(":")[1]
     
+    async with db.pool.acquire() as connection:
+        count = await connection.fetchval("SELECT COUNT(*) FROM users WHERE level = $1 AND status = 'active'", level)
+        
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🏫 Guruhni darajasini qo'yish", callback_data=f"setgrplevel_{group_id}")],
-        [InlineKeyboardButton(text="👥 O'quvchilarni ko'rish", callback_data=f"setstudlevel_{group_id}")],
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_set_levels")]
+        [InlineKeyboardButton(text="👥 O'quvchilarni ko'rish", callback_data=f"view_studs:{level}:0")],
+        [InlineKeyboardButton(text="🎓 O'quvchini darajalash", callback_data=f"eval_studs:{level}")],
+        [InlineKeyboardButton(text="🏫 Guruhni baholash", callback_data=f"eval_grp:{level}")],
+        [InlineKeyboardButton(text="📝 Ball qo'yish", callback_data=f"score_list:{level}")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_levels_menu")]
     ])
     
-    await callback.message.edit_text(f"📈 **Guruh:** {group_name}\nNima qilamiz?", parse_mode="Markdown", reply_markup=kb)
+    await callback.message.edit_text(f"📚 **{level} darajasi**\n👥 O'quvchilar soni: {count}", parse_mode="Markdown", reply_markup=kb)
 
-@router.callback_query(F.data.startswith("setgrplevel_"))
-async def set_grp_level_opts(callback: CallbackQuery):
-    group_id = int(callback.data.split("_")[1])
+@router.callback_query(F.data.startswith("view_studs:"))
+async def view_students_in_level(callback: CallbackQuery, db: Database):
+    parts = callback.data.split(":")
+    level = parts[1]
+    page = int(parts[2])
     
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1️⃣ Starter", callback_data=f"savegrplvl_{group_id}_Starter")],
-        [InlineKeyboardButton(text="2️⃣ Learner", callback_data=f"savegrplvl_{group_id}_Learner")],
-        [InlineKeyboardButton(text="3️⃣ Best", callback_data=f"savegrplvl_{group_id}_Best")]
-    ])
-    
-    await callback.message.edit_text("Guruh uchun darajani tanlang:", reply_markup=kb)
-
-@router.callback_query(F.data.startswith("savegrplvl_"))
-async def save_grp_lvl(callback: CallbackQuery, db: Database):
-    parts = callback.data.split("_")
-    group_id = int(parts[1])
-    level = parts[2]
-    
-    await db.set_group_level(group_id, level)
-    await callback.answer(f"Guruh darajasi {level} etib belgilandi!", show_alert=True)
-    await admin_set_levels(callback, db)
-
-@router.callback_query(F.data.startswith("setstudlevel_"))
-async def view_students_for_level(callback: CallbackQuery, db: Database):
-    group_id = int(callback.data.split("_")[1])
-    students = await db.get_group_students(group_id)
-    
+    async with db.pool.acquire() as connection:
+        students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
+        
     if not students:
-        await callback.message.edit_text("Ushbu guruhda o'quvchilar yo'q.", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"setlevel_grp_{group_id}")]]))
+        await callback.answer("Bu darajada o'quvchilar yo'q.", show_alert=True)
+        return
+        
+    total = len(students)
+    if page >= total:
+        page = total - 1
+    if page < 0:
+        page = 0
+        
+    student = students[page]
+    
+    text = f"👤 **O'quvchi {page + 1}/{total}**\n\n" \
+           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
+           f"**Yosh:** {student['age']}\n" \
+           f"**Tel:** {student['phone_number']}\n" \
+           f"**Daraja:** {student['level']}\n" \
+           f"**Kunlar:** {student.get('days', 'Noma\\'lum')}\n" \
+           f"**ID:** {student['telegram_id']}\n" \
+           f"**O'quvchi maqomi:** {student.get('student_level', 'Belgilanmagan')}"
+           
+    nav_kb = []
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"view_studs:{level}:{page-1}"))
+    if page < total - 1:
+        nav_row.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"view_studs:{level}:{page+1}"))
+    if nav_row:
+        nav_kb.append(nav_row)
+        
+    nav_kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")])
+    
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(inline_keyboard=nav_kb))
+
+@router.callback_query(F.data.startswith("eval_studs:"))
+async def eval_students_list(callback: CallbackQuery, db: Database):
+    level = callback.data.split(":")[1]
+    
+    async with db.pool.acquire() as connection:
+        students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
+        
+    if not students:
+        await callback.answer("Bu darajada o'quvchilar yo'q.", show_alert=True)
         return
         
     kb = []
     for s in students:
-        kb.append([InlineKeyboardButton(text=f"{s['first_name']} {s['last_name']}", callback_data=f"studlvl_{s['telegram_id']}_{group_id}")])
+        kb.append([InlineKeyboardButton(text=f"{s['first_name']} {s['last_name']}", callback_data=f"set_s_lvl:{s['telegram_id']}:{level}")])
         
-    kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"setlevel_grp_{group_id}")])
-    await callback.message.edit_text("O'quvchini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+    kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")])
+    await callback.message.edit_text("Baholash uchun o'quvchini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
-@router.callback_query(F.data.startswith("studlvl_"))
+@router.callback_query(F.data.startswith("set_s_lvl:"))
 async def set_stud_level_opts(callback: CallbackQuery):
-    parts = callback.data.split("_")
+    parts = callback.data.split(":")
     stud_id = parts[1]
-    group_id = parts[2]
+    level = parts[2]
     
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="1️⃣ Starter", callback_data=f"savestudlvl_{stud_id}_Starter_{group_id}")],
-        [InlineKeyboardButton(text="2️⃣ Learner", callback_data=f"savestudlvl_{stud_id}_Learner_{group_id}")],
-        [InlineKeyboardButton(text="3️⃣ Best", callback_data=f"savestudlvl_{stud_id}_Best_{group_id}")]
+        [InlineKeyboardButton(text="SUPPORT", callback_data=f"save_s_lvl:{stud_id}:SUPPORT:{level}")],
+        [InlineKeyboardButton(text="CAPTAIN", callback_data=f"save_s_lvl:{stud_id}:CAPTAIN:{level}")],
+        [InlineKeyboardButton(text="MAIN", callback_data=f"save_s_lvl:{stud_id}:MAIN:{level}")],
+        [InlineKeyboardButton(text="LEARNER", callback_data=f"save_s_lvl:{stud_id}:LEARNER:{level}")],
+        [InlineKeyboardButton(text="INTRODUCTORY", callback_data=f"save_s_lvl:{stud_id}:INTRODUCTORY:{level}")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"eval_studs:{level}")]
     ])
     
     await callback.message.edit_text("O'quvchi uchun darajani tanlang:", reply_markup=kb)
 
-@router.callback_query(F.data.startswith("savestudlvl_"))
+@router.callback_query(F.data.startswith("save_s_lvl:"))
 async def save_stud_lvl(callback: CallbackQuery, db: Database):
-    parts = callback.data.split("_")
+    parts = callback.data.split(":")
     stud_id = int(parts[1])
-    level = parts[2]
-    group_id = int(parts[3])
+    stud_level = parts[2]
+    level = parts[3]
     
-    await db.set_student_level(stud_id, level)
-    await callback.answer(f"O'quvchi darajasi {level} etib belgilandi!", show_alert=True)
+    await db.set_student_level(stud_id, stud_level)
+    await callback.answer(f"O'quvchi darajasi {stud_level} etib belgilandi!", show_alert=True)
     
-    # notify student
     try:
-        await callback.bot.send_message(stud_id, f"🏆 **Sizning darajangiz yangilandi:** {level}")
+        await callback.bot.send_message(stud_id, f"🏆 **Sizning darajangiz yangilandi:** {stud_level}")
     except:
         pass
         
-    # simulate go back
     fake_cb = callback
-    fake_cb.data = f"setstudlevel_{group_id}"
-    await view_students_for_level(fake_cb, db)
+    fake_cb.data = f"eval_studs:{level}"
+    await eval_students_list(fake_cb, db)
 
-# ================= EXISTING ADMIN FUNCTIONS (EVALUATE GROUPS) =================
-
-@router.callback_query(F.data == "back_to_admin")
-async def back_to_admin(callback: CallbackQuery, db: Database):
-    await admin_panel(callback.message, db)
-    await callback.message.delete()
-
-@router.callback_query(F.data == "admin_eval_groups")
-async def admin_eval_groups(callback: CallbackQuery, db: Database):
-    groups = await db.get_all_groups()
-    inline_kb = []
-    if groups:
-        inline_kb = [[InlineKeyboardButton(text=g['name'], callback_data=f"admin_group:{g['id']}")] for g in groups]
-        
-    inline_kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_admin")])
-    keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
-    await callback.message.edit_text("👥 **Guruhni baholash**\nGuruhni tanlang:", parse_mode="Markdown", reply_markup=keyboard)
-
-@router.callback_query(F.data == "admin_eval_students")
-async def admin_eval_students(callback: CallbackQuery, db: Database):
-    # For simplicity, we also show groups to select student to evaluate
-    groups = await db.get_all_groups()
-    inline_kb = []
-    if groups:
-        inline_kb = [[InlineKeyboardButton(text=g['name'], callback_data=f"admin_group:{g['id']}")] for g in groups]
-        
-    inline_kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_admin")])
-    keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
-    await callback.message.edit_text("👤 **O'quvchini baholash**\nAvval guruhni tanlang:", parse_mode="Markdown", reply_markup=keyboard)
-
-
-@router.callback_query(F.data == "add_group")
-async def add_group_start(callback: CallbackQuery, state: FSMContext):
-    await callback.message.edit_text("Yangi guruh nomini kiriting:")
-    await state.set_state(AdminGroupCreation.waiting_for_name)
-
-@router.message(AdminGroupCreation.waiting_for_name)
-async def process_add_group(message: Message, state: FSMContext, db: Database):
-    group_name = message.text
-    await db.create_group(group_name, message.from_user.id)
-    await message.answer(f"✅ '{group_name}' guruhi muvaffaqiyatli yaratildi!\n\n/admin orqali guruhlarni ko'rishingiz mumkin.")
-    await state.clear()
-
-@router.callback_query(F.data.startswith("admin_group:"))
-async def admin_group_view(callback: CallbackQuery, db: Database):
-    group_id = int(callback.data.split(":")[1])
-    group_name = await db.get_group_name(group_id)
-    students = await db.get_group_students(group_id)
+@router.callback_query(F.data.startswith("eval_grp:"))
+async def eval_grp_opts(callback: CallbackQuery):
+    level = callback.data.split(":")[1]
     
-    if not students:
-        await callback.message.edit_text(f"👥 **Guruh:** {group_name}\n\nBu guruhda faol o'quvchilar yo'q.", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_eval_groups")]]))
-        return
-        
-    text = f"👥 **Guruh:** {group_name}\n━━━━━━━━━━━━━━━━━━\n"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="SMART GROUP", callback_data=f"save_g_lvl:{level}:SMART GROUP")],
+        [InlineKeyboardButton(text="MIDDLE CLASS", callback_data=f"save_g_lvl:{level}:MIDDLE CLASS")],
+        [InlineKeyboardButton(text="LAZY TEAM", callback_data=f"save_g_lvl:{level}:LAZY TEAM")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")]
+    ])
     
-    today_date = date.today()
-    keyboard_buttons = []
+    await callback.message.edit_text(f"🏫 **{level}** guruhi(darajasi) uchun nom/daraja tanlang:", reply_markup=kb)
+
+@router.callback_query(F.data.startswith("save_g_lvl:"))
+async def save_grp_lvl(callback: CallbackQuery, db: Database):
+    parts = callback.data.split(":")
+    level = parts[1]
+    grp_level = parts[2]
     
     async with db.pool.acquire() as connection:
-        for student in students:
-            is_present = await connection.fetchval("SELECT is_present FROM attendance WHERE user_id = $1 AND date = $2", student['telegram_id'], today_date)
-            if is_present is None:
-                status_emoji = "⏳"
-            elif is_present:
-                status_emoji = "✅"
-            else:
-                status_emoji = "❌"
-            text += f"{status_emoji} {student['first_name']} {student['last_name']}\n"
-            
-            keyboard_buttons.append([InlineKeyboardButton(text=f"Baholash: {student['first_name']} {student['last_name']}", callback_data=f"score:{student['telegram_id']}:{group_id}")])
-            
-    keyboard_buttons.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_eval_groups")])
-    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS level_status (
+                level_name VARCHAR(50) PRIMARY KEY,
+                status VARCHAR(50)
+            );
+        """)
+        await connection.execute("""
+            INSERT INTO level_status (level_name, status) 
+            VALUES ($1, $2)
+            ON CONFLICT (level_name) DO UPDATE SET status = EXCLUDED.status;
+        """, level, grp_level)
+        
+    await callback.answer(f"Guruh darajasi {grp_level} etib belgilandi!", show_alert=True)
+    
+    fake_cb = callback
+    fake_cb.data = f"admin_lvl:{level}"
+    await admin_level_menu(fake_cb, db)
+
+@router.callback_query(F.data.startswith("score_list:"))
+async def score_students_list(callback: CallbackQuery, db: Database):
+    level = callback.data.split(":")[1]
+    
+    async with db.pool.acquire() as connection:
+        students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active'", level)
+        
+    if not students:
+        await callback.answer("Bu darajada o'quvchilar yo'q.", show_alert=True)
+        return
+        
+    kb = []
+    for s in students:
+        kb.append([InlineKeyboardButton(text=f"{s['first_name']} {s['last_name']}", callback_data=f"score:{s['telegram_id']}:{level}")])
+        
+    kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")])
+    await callback.message.edit_text("Ball qo'yish uchun o'quvchini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
 @router.callback_query(F.data.startswith("score:"))
 async def ask_for_score(callback: CallbackQuery, state: FSMContext):

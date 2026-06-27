@@ -15,8 +15,8 @@ async def cmd_start(message: Message, state: FSMContext, db: Database):
     user = await db.get_user(message.from_user.id)
     if user:
         if user['status'] == 'active':
-            from handlers.student import get_student_keyboard
-            await message.answer("✅ Siz botdan ro'yxatdan o'tgansiz va hisobingiz faol.\nBot faol ishlamoqda. Pastdagi menyudan tugmalar orqali o'zingizga kerakli narsani boshqarishingiz mumkin.", reply_markup=get_student_keyboard())
+            from handlers.student import get_user_keyboard
+            await message.answer("✅ Siz botdan ro'yxatdan o'tgansiz va hisobingiz faol.\nBot faol ishlamoqda. Pastdagi menyudan tugmalar orqali o'zingizga kerakli narsani boshqarishingiz mumkin.", reply_markup=get_user_keyboard(message.from_user.id))
         elif user['status'] == 'pending':
             await message.answer("⏳ Sizning hisobingiz admin tomonidan tasdiqlanishini kutmoqda.")
         elif user['status'] == 'rejected':
@@ -244,12 +244,12 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
         
         await state.clear()
         
-        from handlers.student import get_student_keyboard
+        from handlers.student import get_user_keyboard
         
         success_text = "🎉 **Tasdiqlangandan so'ng sizning profilingiz ochildi va pastdagi tugmalar orqali foydalanishingiz mumkin.**"
         
         await callback.message.delete()
-        await callback.message.answer(success_text, reply_markup=get_student_keyboard(), parse_mode="Markdown")
+        await callback.message.answer(success_text, reply_markup=get_user_keyboard(callback.from_user.id), parse_mode="Markdown")
     except Exception as e:
         await callback.message.answer(f"⚠️ Xatolik yuz berdi: {str(e)}\nIltimos, qaytadan urinib ko'ring yoki adminga murojaat qiling.")
         return
