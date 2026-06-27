@@ -206,11 +206,16 @@ async def show_group_level(message: Message, db: Database):
         from pytz import timezone
         uz_tz = timezone('Asia/Tashkent')
         time_str = updated_at.astimezone(uz_tz).strftime('%d.%m.%Y %H:%M')
-        time_msg = f"\n\n🕒 **O'zgargan vaqti:** `{time_str}`"
+        time_msg = f"\n\n🕒 <b>O'zgargan vaqti:</b> {time_str}"
     else:
         time_msg = ""
     
-    await message.answer(f"🏫 **Guruh (Daraja):** {level}\n📈 **Guruh darajasi:** {g_level}{time_msg}")
+    text = (
+        f"🏫 <b>Guruh nomi:</b> {level}\n"
+        f"📈 <b>Guruh darajasi:</b> {g_level}"
+        f"{time_msg}"
+    )
+    await message.answer(text, parse_mode="HTML")
 
 @router.message(F.text == "🏆 O'zini darajasini ko'rish", StateFilter(None))
 async def show_student_level(message: Message, db: Database):
@@ -225,11 +230,17 @@ async def show_student_level(message: Message, db: Database):
         from pytz import timezone
         uz_tz = timezone('Asia/Tashkent')
         time_str = updated_at.astimezone(uz_tz).strftime('%d.%m.%Y %H:%M')
-        time_msg = f"\n\n🕒 **O'zgargan vaqti:** `{time_str}`"
+        time_msg = f"\n\n🕒 <b>O'zgargan vaqti:</b> {time_str}"
     else:
         time_msg = ""
         
-    await message.answer(f"🏅 **Sizning shaxsiy darajangiz:**\n\n💎 **{s_level}** 💎\n\nO'qituvchi tomonidan belgilangan baholash.{time_msg}")
+    text = (
+        f"🏅 <b>Sizning shaxsiy darajangiz:</b>\n\n"
+        f"💎 <b>{s_level}</b> 💎\n\n"
+        f"<i>O'qituvchi tomonidan belgilangan baholash.</i>"
+        f"{time_msg}"
+    )
+    await message.answer(text, parse_mode="HTML")
 
 @router.message(F.text == "📩 Ustozga xabar yuborish", StateFilter(None))
 async def msg_teacher(message: Message, db: Database, state: FSMContext):
