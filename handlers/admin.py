@@ -209,12 +209,14 @@ async def view_students_in_level(callback: CallbackQuery, db: Database):
         
     student = students[page]
     
+    days = student.get('days') or "Noma'lum"
+    
     text = f"👤 **O'quvchi {page + 1}/{total}**\n\n" \
            f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
            f"**Yosh:** {student['age']}\n" \
            f"**Tel:** {student['phone_number']}\n" \
            f"**Daraja:** {student['level']}\n" \
-           f"**Kunlar:** {student.get('days', 'Noma\\'lum')}\n" \
+           f"**Kunlar:** {days}\n" \
            f"**ID:** {student['telegram_id']}\n" \
            f"**O'quvchi maqomi:** {student.get('student_level', 'Belgilanmagan')}"
            
