@@ -14,7 +14,8 @@ def get_user_keyboard(user_id: int):
     if user_id in ADMIN_IDS:
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")]
+                [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")],
+                [KeyboardButton(text="👤 O'quvchilarni ko'rish"), KeyboardButton(text="🏫 Guruhlarni boshqarish")]
             ],
             resize_keyboard=True
         )
@@ -193,8 +194,12 @@ async def show_group_level(message: Message, db: Database):
         
     async with db.pool.acquire() as connection:
         try:
-            status_row = await connection.fetchrow("SELECT status, updated_at FROM level_status WHERE level_name = $1", level)
-            status = status_row['status'] if status_row else None
+            # First try fetching from groups table since we are migrating to dynamic groups
+            group_row = await connection.fetchrow("SELECT group_level FROM groups WHERE name = $1", level)
+            status = group_row['group_level'] if group_row else None
+            
+            # Fetch updated_at from old level_status table to preserve existing timestamps
+            status_row = await connection.fetchrow("SELECT updated_at FROM level_status WHERE level_name = $1", level)
             updated_at = status_row['updated_at'] if status_row else None
         except Exception:
             status = None
@@ -209,10 +214,22 @@ async def show_group_level(message: Message, db: Database):
         time_msg = f"\n\n🕒 <b>O'zgargan vaqti:</b> {time_str}"
     else:
         time_msg = ""
+        
+    g_emojis = {
+        "SMART GROUP": "💡",
+        "MIDDLE CLASS": "⚖️",
+        "LAZY TEAM": "🐌"
+    }
+    g_emoji = g_emojis.get(g_level, "")
+    
+    if g_emoji:
+        g_level_display = f"{g_emoji} <b>{g_level}</b> {g_emoji}"
+    else:
+        g_level_display = f"<b>{g_level}</b>"
     
     text = (
         f"🏫 <b>Guruh nomi:</b> {level}\n"
-        f"📈 <b>Guruh darajasi:</b> {g_level}"
+        f"📈 <b>Guruh darajasi:</b> {g_level_display}"
         f"{time_msg}"
     )
     await message.answer(text, parse_mode="HTML")

@@ -77,7 +77,7 @@ async def process_age(message: Message, state: FSMContext):
     await state.set_state(Registration.waiting_for_phone)
 
 @router.message(Registration.waiting_for_phone)
-async def process_phone(message: Message, state: FSMContext):
+async def process_phone(message: Message, state: FSMContext, db: Database):
     if message.contact:
         phone_number = message.contact.phone_number
     elif message.text:
@@ -88,118 +88,43 @@ async def process_phone(message: Message, state: FSMContext):
         
     await state.update_data(phone_number=phone_number)
     
-    # Tugmani yo'qotish uchun vaqtinchalik xabar
     tmp_msg = await message.answer("⏳", reply_markup=ReplyKeyboardRemove())
     try:
         await tmp_msg.delete()
     except:
         pass
     
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🔹 Beginner", callback_data="level:Beginner"), InlineKeyboardButton(text="🔹 Elementary", callback_data="level:Elementary")],
-            [InlineKeyboardButton(text="🔸 Pre-Intermediate", callback_data="level:Pre-Intermediate"), InlineKeyboardButton(text="🔸 Intermediate", callback_data="level:Intermediate")],
-            [InlineKeyboardButton(text="🔥 Upper-Intermediate", callback_data="level:Upper-Intermediate"), InlineKeyboardButton(text="🔥 Advanced", callback_data="level:Advanced")],
-            [InlineKeyboardButton(text="🎓 IELTS", callback_data="level:IELTS"), InlineKeyboardButton(text="🏆 CEFR", callback_data="level:CEFR")]
-        ]
-    )
-    
-    await message.answer("📚 Qaysi guruhda o'qiysiz?\nIltimos, darajangizni tanlang:", reply_markup=keyboard)
-    await state.set_state(Registration.waiting_for_level)
-
-def get_days_keyboard(selected_days: list):
-    days_map = {
-        0: "Dushanba", 1: "Seshanba", 2: "Chorshanba", 
-        3: "Payshanba", 4: "Juma", 5: "Shanba", 6: "Yakshanba"
-    }
-    
-    kb = []
-    row = []
-    for i in range(7):
-        mark = "✅ " if i in selected_days else ""
-        btn = InlineKeyboardButton(text=f"{mark}{days_map[i]}", callback_data=f"toggle_day:{i}")
-        row.append(btn)
-        if len(row) == 2 or i == 6:
-            kb.append(row)
-            row = []
-            
-    kb.append([
-        InlineKeyboardButton(text="⬅️ Orqaga", callback_data="back_to_level"),
-        InlineKeyboardButton(text="💾 Saqlash (OK)", callback_data="confirm_days")
-    ])
-    return InlineKeyboardMarkup(inline_keyboard=kb)
-
-@router.callback_query(Registration.waiting_for_level, F.data.startswith("level:"))
-async def process_level(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    level = callback.data.split(":")[1]
-    await state.update_data(level=level)
-    await state.update_data(selected_days=[])
-    
-    await callback.message.edit_text(
-        f"✅ Siz **{level}** darajasini tanladingiz.\n\n"
-        "🗓 Endi qachon o'qishingizni (kunlarni) tanlang va **Saqlash (OK)** tugmasini bosing:", 
-        reply_markup=get_days_keyboard([]),
-        parse_mode="Markdown"
-    )
-    await state.set_state(Registration.waiting_for_days)
-
-@router.callback_query(Registration.waiting_for_days, F.data == "back_to_level")
-async def back_to_level(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🔹 Beginner", callback_data="level:Beginner"), InlineKeyboardButton(text="🔹 Elementary", callback_data="level:Elementary")],
-            [InlineKeyboardButton(text="🔸 Pre-Intermediate", callback_data="level:Pre-Intermediate"), InlineKeyboardButton(text="🔸 Intermediate", callback_data="level:Intermediate")],
-            [InlineKeyboardButton(text="🔥 Upper-Intermediate", callback_data="level:Upper-Intermediate"), InlineKeyboardButton(text="🔥 Advanced", callback_data="level:Advanced")],
-            [InlineKeyboardButton(text="🎓 IELTS", callback_data="level:IELTS"), InlineKeyboardButton(text="🏆 CEFR", callback_data="level:CEFR")]
-        ]
-    )
-    await callback.message.edit_text("📚 Qaysi guruhda o'qiysiz?\nIltimos, darajangizni tanlang:", reply_markup=keyboard)
-    await state.set_state(Registration.waiting_for_level)
-
-@router.callback_query(Registration.waiting_for_days, F.data.startswith("toggle_day:"))
-async def toggle_day(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    day = int(callback.data.split(":")[1])
-    data = await state.get_data()
-    selected_days = data.get("selected_days", [])
-    
-    if day in selected_days:
-        selected_days.remove(day)
-    else:
-        selected_days.append(day)
-        
-    await state.update_data(selected_days=selected_days)
-    await callback.message.edit_reply_markup(reply_markup=get_days_keyboard(selected_days))
-
-@router.callback_query(Registration.waiting_for_days, F.data == "confirm_days")
-async def confirm_days(callback: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    selected_days = data.get("selected_days", [])
-    
-    if not selected_days:
-        await callback.answer("⚠️ Kamida 1 ta kun tanlashingiz kerak!", show_alert=True)
+    groups = await db.get_all_groups()
+    if not groups:
+        await message.answer("Hozircha guruhlar mavjud emas. Iltimos, keyinroq urinib ko'ring yoki adminga murojaat qiling.")
+        await state.clear()
         return
         
+    kb = []
+    for g in groups:
+        kb.append([InlineKeyboardButton(text=f"🏫 {g['name']} ({g['days']} | {g['time']})", callback_data=f"level:{g['id']}")])
+        
+    await message.answer("📚 Qaysi guruhda o'qiysiz?\nIltimos, guruhingizni tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+    await state.set_state(Registration.waiting_for_level)
+
+@router.callback_query(Registration.waiting_for_level, F.data.startswith("level:"))
+async def process_level(callback: CallbackQuery, state: FSMContext, db: Database):
     await callback.answer()
-    selected_days.sort()
-    days_map = {
-        0: "Dushanba", 1: "Seshanba", 2: "Chorshanba", 
-        3: "Payshanba", 4: "Juma", 5: "Shanba", 6: "Yakshanba"
-    }
+    group_id = int(callback.data.split(":")[1])
+    group = await db.get_group(group_id)
     
-    days_str = ", ".join([days_map[d] for d in selected_days])
+    await state.update_data(level=group['name'])
+    await state.update_data(days_json=group['days'])
+    await state.update_data(group_id=group_id)
     
-    # Save the days as a JSON list in DB format
-    await state.update_data(days_json=json.dumps(selected_days))
+    data = await state.get_data()
     
     confirm_text = f"📋 **Sizning ma'lumotlaringiz:**\n\n" \
                    f"👤 **Ism-familiya:** {data['first_name']} {data['last_name']}\n" \
                    f"📅 **Yosh:** {data['age']}\n" \
                    f"📞 **Raqam:** {data['phone_number']}\n" \
-                   f"📚 **Daraja:** {data['level']}\n" \
-                   f"🗓 **Dars kunlari:** Haftada {len(selected_days)} kun ({days_str})\n\n" \
+                   f"🏫 **Guruh:** {group['name']}\n" \
+                   f"🗓 **Dars vaqti:** {group['days']} | {group['time']}\n\n" \
                    f"Hamma ma'lumotlar to'g'rimi?"
                    
     kb = InlineKeyboardMarkup(
@@ -234,7 +159,7 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
             last_name=data.get('last_name', ''),
             age=data.get('age', 0),
             phone_number=data.get('phone_number', ''),
-            group_id=None,
+            group_id=data.get('group_id'),
             level=data.get('level', ''),
             days=data.get('days_json', '[]')
         )

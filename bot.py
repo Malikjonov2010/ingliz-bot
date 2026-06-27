@@ -31,10 +31,11 @@ async def main():
     # Pass db to handlers via workflow_data (Dependency Injection)
     dp.workflow_data.update({'db': db})
 
-    # Include routers
+    from handlers import registration, student, admin, admin_groups
     dp.include_router(registration.router)
-    dp.include_router(admin.router)
     dp.include_router(student.router)
+    dp.include_router(admin.router)
+    dp.include_router(admin_groups.router)
 
     from aiogram.types import BotCommand
     commands = [

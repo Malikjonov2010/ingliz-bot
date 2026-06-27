@@ -145,31 +145,35 @@ async def confirm_broadcast(callback: CallbackQuery, state: FSMContext, db: Data
 
 # ================= LEVEL & STUDENT MANAGEMENT =================
 @router.message(F.text == "👥 Guruhlar va O'quvchilar", StateFilter(None))
-async def admin_groups_and_students(message: Message):
+async def admin_groups_and_students(message: Message, db: Database):
     if message.from_user.id not in ADMIN_IDS:
         return
-    levels = ["Beginner", "Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced", "IELTS", "CEFR"]
+    groups = await db.get_all_groups()
+    if not groups:
+        await message.answer("Hozircha guruhlar yaratilmagan.")
+        return
+        
     inline_kb = []
-    for i in range(0, len(levels), 2):
-        row = [InlineKeyboardButton(text=levels[i], callback_data=f"admin_lvl:{levels[i]}")]
-        if i + 1 < len(levels):
-            row.append(InlineKeyboardButton(text=levels[i+1], callback_data=f"admin_lvl:{levels[i+1]}"))
+    for i in range(0, len(groups), 2):
+        row = [InlineKeyboardButton(text=groups[i]['name'], callback_data=f"admin_lvl:{groups[i]['name']}")]
+        if i + 1 < len(groups):
+            row.append(InlineKeyboardButton(text=groups[i+1]['name'], callback_data=f"admin_lvl:{groups[i+1]['name']}"))
         inline_kb.append(row)
         
     keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
-    await message.answer("👥 **Guruhlar va O'quvchilar**\nKerakli darajani tanlang:", parse_mode="Markdown", reply_markup=keyboard)
+    await message.answer("👥 **Guruhlar va O'quvchilar**\nKerakli guruhni tanlang:", parse_mode="Markdown", reply_markup=keyboard)
 
 @router.callback_query(F.data == "admin_levels_menu")
-async def back_to_levels_menu(callback: CallbackQuery):
-    levels = ["Beginner", "Elementary", "Pre-Intermediate", "Intermediate", "Upper-Intermediate", "Advanced", "IELTS", "CEFR"]
+async def back_to_levels_menu(callback: CallbackQuery, db: Database):
+    groups = await db.get_all_groups()
     inline_kb = []
-    for i in range(0, len(levels), 2):
-        row = [InlineKeyboardButton(text=levels[i], callback_data=f"admin_lvl:{levels[i]}")]
-        if i + 1 < len(levels):
-            row.append(InlineKeyboardButton(text=levels[i+1], callback_data=f"admin_lvl:{levels[i+1]}"))
+    for i in range(0, len(groups), 2):
+        row = [InlineKeyboardButton(text=groups[i]['name'], callback_data=f"admin_lvl:{groups[i]['name']}")]
+        if i + 1 < len(groups):
+            row.append(InlineKeyboardButton(text=groups[i+1]['name'], callback_data=f"admin_lvl:{groups[i+1]['name']}"))
         inline_kb.append(row)
     keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
-    await callback.message.edit_text("👥 **Guruhlar va O'quvchilar**\nKerakli darajani tanlang:", parse_mode="Markdown", reply_markup=keyboard)
+    await callback.message.edit_text("👥 **Guruhlar va O'quvchilar**\nKerakli guruhni tanlang:", parse_mode="Markdown", reply_markup=keyboard)
 
 @router.callback_query(F.data.startswith("admin_lvl:"))
 async def admin_level_menu(callback: CallbackQuery, db: Database):
@@ -186,7 +190,7 @@ async def admin_level_menu(callback: CallbackQuery, db: Database):
         [InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_levels_menu")]
     ])
     
-    await callback.message.edit_text(f"📚 **{level} darajasi**\n👥 O'quvchilar soni: {count}", parse_mode="Markdown", reply_markup=kb)
+    await callback.message.edit_text(f"📚 **{level} guruhi**\n👥 O'quvchilar soni: {count}", parse_mode="Markdown", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("view_studs:"))
 async def view_students_in_level(callback: CallbackQuery, db: Database):
@@ -308,15 +312,7 @@ async def save_grp_lvl(callback: CallbackQuery, db: Database):
     
     async with db.pool.acquire() as connection:
         await connection.execute("""
-            CREATE TABLE IF NOT EXISTS level_status (
-                level_name VARCHAR(50) PRIMARY KEY,
-                status VARCHAR(50)
-            );
-        """)
-        await connection.execute("""
-            INSERT INTO level_status (level_name, status) 
-            VALUES ($1, $2)
-            ON CONFLICT (level_name) DO UPDATE SET status = EXCLUDED.status;
+            UPDATE groups SET group_level = $2 WHERE name = $1
         """, level, grp_level)
         
     await callback.answer(f"Guruh darajasi {grp_level} etib belgilandi!", show_alert=True)

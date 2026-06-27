@@ -17,6 +17,8 @@ class AdminDeletion(StatesGroup):
 
 class AdminGroupCreation(StatesGroup):
     waiting_for_name = State()
+    waiting_for_days = State()
+    waiting_for_time = State()
 
 class AdminBroadcast(StatesGroup):
     waiting_for_message = State()
