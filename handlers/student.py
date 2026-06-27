@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove, CallbackQuery
 from datetime import date
 from database.db import Database
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from states.register_states import Deletion, StudentAttendance
 from config import ADMIN_IDS
@@ -21,7 +21,7 @@ def get_student_keyboard():
     )
     return keyboard
 
-@router.message(F.text == "🙋‍♂️ Davomat")
+@router.message(F.text == "🙋‍♂️ Davomat", StateFilter(None))
 async def mark_attendance(message: Message, db: Database):
     user_id = message.from_user.id
     user = await db.get_user(user_id)
@@ -142,7 +142,7 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
     await message.answer("✅ Sababi adminga yuborildi. Rahmat!", reply_markup=get_student_keyboard())
     await state.clear()
 
-@router.message(F.text == "📊 Mening Natijalarim")
+@router.message(F.text == "📊 Mening Natijalarim", StateFilter(None))
 async def show_dashboard(message: Message, db: Database):
     user_id = message.from_user.id
     user = await db.get_user(user_id)
@@ -172,7 +172,7 @@ async def show_dashboard(message: Message, db: Database):
     
     await message.answer(dashboard, parse_mode="Markdown", reply_markup=get_student_keyboard())
 
-@router.message(F.text == "🎓 O'zini guruhini darajasi")
+@router.message(F.text == "🎓 O'zini guruhini darajasi", StateFilter(None))
 async def show_group_level(message: Message, db: Database):
     user = await db.get_user(message.from_user.id)
     if not user or user['status'] != 'active':
@@ -196,7 +196,7 @@ async def show_group_level(message: Message, db: Database):
     
     await message.answer(f"🏫 **Guruh:** {g_name}\n📈 **Guruh darajasi:** {g_level}")
 
-@router.message(F.text == "🏆 O'zini darajasini ko'rish")
+@router.message(F.text == "🏆 O'zini darajasini ko'rish", StateFilter(None))
 async def show_student_level(message: Message, db: Database):
     user = await db.get_user(message.from_user.id)
     if not user or user['status'] != 'active':
@@ -205,11 +205,11 @@ async def show_student_level(message: Message, db: Database):
     s_level = user.get('student_level') or "Hali belgilanmagan"
     await message.answer(f"🏅 **Sizning shaxsiy darajangiz:** {s_level}\n\nO'qituvchi tomonidan belgilangan baholash.")
 
-@router.message(F.text == "📩 Ustozga xabar yuborish")
+@router.message(F.text == "📩 Ustozga xabar yuborish", StateFilter(None))
 async def msg_teacher(message: Message):
     await message.answer("Ustozingizga xabar yubormoqchi bo'lsangiz, ushbu manzilga yozing:\n👉 @Muhammaddiyor_courses_admin")
 
-@router.message(F.text == "📢 Kanal va guruhlar")
+@router.message(F.text == "📢 Kanal va guruhlar", StateFilter(None))
 async def channels_info(message: Message):
     text = "📢 **Bizning rasmiy kanal, guruh va botlarimiz:**\n\n" \
            "🔗 [Super Teaching](https://t.me/superteaching)\n" \
@@ -239,7 +239,7 @@ async def channels_info(message: Message):
     
     await message.answer(text, parse_mode="Markdown", reply_markup=keyboard, disable_web_page_preview=True)
 
-@router.message(Command("delete_account"))
+@router.message(Command("delete_account"), StateFilter(None))
 async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
     user = await db.get_user(message.from_user.id)
     if not user:
