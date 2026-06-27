@@ -299,12 +299,15 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
             unsubbed_buttons.append(InlineKeyboardButton(text=name, url=url))
             
     if unsubbed_buttons:
-        # Group buttons into pairs
         kb_rows = [unsubbed_buttons[i:i+2] for i in range(0, len(unsubbed_buttons), 2)]
         kb_rows.append([InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="check_teacher_sub")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=kb_rows)
         
-        text = "Ustozga xabar yuborishdan avval, quyidagi kanal va guruhlarga obuna bo'lishingiz shart:\n\nObuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
+        if len(unsubbed_buttons) == len(channels):
+            text = "Ustozga xabar yuborish uchun **barcha** kanal va guruhlarga obuna bo'lishingiz shart!\n\nObuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
+        else:
+            text = "Ustozga xabar yuborish uchun quyidagi **qolib ketgan** kanallarga obuna bo'ling:\n\nObuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
+            
         await message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
     else:
         # All subbed
@@ -427,11 +430,11 @@ async def process_teacher_sub(callback: CallbackQuery, state: FSMContext, db: Da
                 not_subscribed = True
                 break
         except Exception:
-            # Assume subscribed if bot cannot check
-            pass
+            not_subscribed = True
+            break
             
     if not_subscribed:
-        await callback.answer("❌ Avval barcha kanal va guruhlarga obuna bo'ling!", show_alert=True)
+        await callback.answer("❌ Kechirasiz, siz hali barcha kerakli kanal va guruhlarga obuna bo'lmagansiz. Iltimos, barchasiga obuna bo'ling!", show_alert=True)
     else:
         await callback.message.delete()
         await state.set_state(TeacherMessage.waiting_for_message)
@@ -461,13 +464,14 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     
     await db.log_teacher_message(message.from_user.id)
     
-    admin_text = f"📩 **Ustozga yangi xabar:**\n\n" \
-                 f"👤 **O'quvchi:** {name}\n" \
-                 f"💬 **Xabar:**\n{text}"
+    from utils import notify_admins_async, get_student_profile_text, get_student_profile_keyboard
+    
+    profile_text = get_student_profile_text(user, page_info=" (Yangi xabar)")
+    admin_text = f"{profile_text}\n\n💬 **O'quvchi xabari:**\n{text}"
+    kb = get_student_profile_keyboard(user['telegram_id'], back_callback_data="astud_list")
                  
-    from utils import notify_admins_async
     import asyncio
-    asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS, parse_mode="Markdown"))
+    asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS, parse_mode="Markdown", reply_markup=kb))
     
     await state.clear()
     keyboard = get_user_keyboard(message.from_user.id)

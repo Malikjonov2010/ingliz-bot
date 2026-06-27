@@ -131,31 +131,12 @@ async def view_astud_details(callback: CallbackQuery, db: Database):
     if not student:
         await callback.answer("O'quvchi topilmadi.", show_alert=True)
         return
+    from utils import get_student_profile_text_and_keyboard
+    text, kb = await get_student_profile_text_and_keyboard(db, stud_id)
+    if not text:
+        await callback.answer("O'quvchi topilmadi.", show_alert=True)
+        return
         
-    days = student.get('days') or "Noma'lum"
-    bio = student.get('teacher_bio')
-    bio_text = f"\n**📝 Ustoz fikri:** {bio}" if bio else ""
-    
-    level_val = student.get('level', "Noma'lum")
-    student_level_val = student.get('student_level', 'Belgilanmagan')
-    
-    text = f"👤 **O'quvchi ma'lumotlari:**\n\n" \
-           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
-           f"**Yosh:** {student['age']}\n" \
-           f"**Tel:** {student['phone_number']}\n" \
-           f"**Guruh/Daraja:** {level_val}\n" \
-           f"**Kunlar:** {days}\n" \
-           f"**ID:** {student['telegram_id']}\n" \
-           f"**O'quvchi maqomi:** {student_level_val}" \
-           f"{bio_text}"
-           
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📈 Darajani belgilash", callback_data=f"astud_set_lvl:{stud_id}")],
-        [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{stud_id}")],
-        [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{stud_id}")],
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="astud_list")]
-    ])
-    
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("astud_set_lvl:"))
@@ -180,30 +161,8 @@ async def astud_save_lvl(callback: CallbackQuery, db: Database):
     await db.set_student_level(stud_id, stud_level)
     await callback.answer(f"O'quvchi darajasi {stud_level} etib belgilandi!", show_alert=True)
     
-    student = await db.get_user(stud_id)
-    days = student.get('days') or "Noma'lum"
-    bio = student.get('teacher_bio')
-    bio_text = f"\n**📝 Ustoz fikri:** {bio}" if bio else ""
-    
-    level_val = student.get('level', "Noma'lum")
-    student_level_val = student.get('student_level', 'Belgilanmagan')
-    
-    text = f"👤 **O'quvchi ma'lumotlari:**\n\n" \
-           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
-           f"**Yosh:** {student['age']}\n" \
-           f"**Tel:** {student['phone_number']}\n" \
-           f"**Guruh/Daraja:** {level_val}\n" \
-           f"**Kunlar:** {days}\n" \
-           f"**ID:** {student['telegram_id']}\n" \
-           f"**O'quvchi maqomi:** {student_level_val}" \
-           f"{bio_text}"
-           
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📈 Darajani belgilash", callback_data=f"astud_set_lvl:{stud_id}")],
-        [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{stud_id}")],
-        [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{stud_id}")],
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="astud_list")]
-    ])
+    from utils import get_student_profile_text_and_keyboard
+    text, kb = await get_student_profile_text_and_keyboard(db, stud_id)
     
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
 

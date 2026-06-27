@@ -35,3 +35,44 @@ async def broadcast_message_async(bot, users: list, text: str, parse_mode: str =
             logging.error(f"Failed to send to user {u['telegram_id']}: {e}")
     
     return count
+
+def get_student_profile_text(student: dict, page_info: str = "") -> str:
+    days = student.get('days') or "Noma'lum"
+    bio = student.get('teacher_bio')
+    bio_text = f"\n**📝 Ustoz fikri:** {bio}" if bio else ""
+    
+    level_val = student.get('level', "Noma'lum")
+    student_level_val = student.get('student_level', 'Belgilanmagan')
+    
+    text = f"👤 **O'quvchi ma'lumotlari{page_info}:**\n\n" \
+           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
+           f"**Yosh:** {student['age']}\n" \
+           f"**Tel:** {student['phone_number']}\n" \
+           f"**Guruh/Daraja:** {level_val}\n" \
+           f"**Kunlar:** {days}\n" \
+           f"**ID:** {student['telegram_id']}\n" \
+           f"**O'quvchi maqomi:** {student_level_val}" \
+           f"{bio_text}"
+    return text
+
+def get_student_profile_keyboard(student_id: int, back_callback_data: str = "astud_list", extra_buttons=None):
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    buttons = [
+        [InlineKeyboardButton(text="📈 Darajani belgilash", callback_data=f"astud_set_lvl:{student_id}")],
+        [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{student_id}")],
+        [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{student_id}")]
+    ]
+    if extra_buttons:
+        for b in extra_buttons:
+            buttons.append(b)
+            
+    buttons.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=back_callback_data)])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+async def get_student_profile_text_and_keyboard(db, student_id, back_callback_data="astud_list"):
+    student = await db.get_user(student_id)
+    if not student:
+        return None, None
+    text = get_student_profile_text(student)
+    kb = get_student_profile_keyboard(student_id, back_callback_data)
+    return text, kb

@@ -213,29 +213,19 @@ async def view_students_in_level(callback: CallbackQuery, db: Database):
         
     student = students[page]
     
-    days = student.get('days') or "Noma'lum"
-    
-    text = f"👤 **O'quvchi {page + 1}/{total}**\n\n" \
-           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
-           f"**Yosh:** {student['age']}\n" \
-           f"**Tel:** {student['phone_number']}\n" \
-           f"**Daraja:** {student['level']}\n" \
-           f"**Kunlar:** {days}\n" \
-           f"**ID:** {student['telegram_id']}\n" \
-           f"**O'quvchi maqomi:** {student.get('student_level', 'Belgilanmagan')}"
+    from utils import get_student_profile_text, get_student_profile_keyboard
+    text = get_student_profile_text(student, page_info=f" {page + 1}/{total}")
            
-    nav_kb = []
     nav_row = []
     if page > 0:
         nav_row.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"view_studs:{level}:{page-1}"))
     if page < total - 1:
         nav_row.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"view_studs:{level}:{page+1}"))
-    if nav_row:
-        nav_kb.append(nav_row)
         
-    nav_kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")])
+    extra_buttons = [nav_row] if nav_row else []
+    kb = get_student_profile_keyboard(student['telegram_id'], back_callback_data=f"admin_lvl:{level}", extra_buttons=extra_buttons)
     
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(inline_keyboard=nav_kb))
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("eval_studs:"))
 async def eval_students_list(callback: CallbackQuery, db: Database):
