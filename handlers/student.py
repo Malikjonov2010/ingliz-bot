@@ -219,19 +219,16 @@ async def show_detailed_dashboard(message: Message, db: Database):
     performance_grade = stats.get('performance_grade')
     teacher_bio = stats.get('teacher_bio')
     
-    if performance_grade:
-        grade = performance_grade
+    if 140 <= current_cycle_total <= 150:
+        grade = "Excellent 🥇"
+    elif 120 <= current_cycle_total <= 139:
+        grade = "Very Good 🟢"
+    elif 100 <= current_cycle_total <= 119:
+        grade = "Good 🟡"
+    elif 80 <= current_cycle_total <= 99:
+        grade = "Needs Improvement 🟠"
     else:
-        if 140 <= current_cycle_total <= 150:
-            grade = "Excellent 🥇"
-        elif 120 <= current_cycle_total <= 139:
-            grade = "Very Good 🟢"
-        elif 100 <= current_cycle_total <= 119:
-            grade = "Good 🟡"
-        elif 80 <= current_cycle_total <= 99:
-            grade = "Needs Improvement 🟠"
-        else:
-            grade = "Weak 🔴"
+        grade = "Weak 🔴"
 
     scores_text = ""
     if current_cycle_scores:

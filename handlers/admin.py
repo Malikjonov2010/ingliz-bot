@@ -332,13 +332,43 @@ async def score_students_list(callback: CallbackQuery, db: Database):
     kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")])
     await callback.message.edit_text("Ball qo'yish uchun o'quvchini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
-@router.callback_query(F.data.startswith("score:"))
-async def ask_for_score(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(lambda c: c.data.startswith("score:") or c.data.startswith("astud_score_add:"))
+async def ask_for_score(callback: CallbackQuery, state: FSMContext, db: Database):
     data = callback.data.split(":")
     student_id = int(data[1])
-    group_id = int(data[2])
     
-    await state.update_data(score_student_id=student_id, score_group_id=group_id)
+    # Check if today is a class day
+    student = await db.get_user(student_id)
+    if not student:
+        await callback.answer("O'quvchi topilmadi.", show_alert=True)
+        return
+        
+    group_name = student.get('level')
+    if not group_name:
+        await callback.answer("O'quvchining guruhi belgilanmagan.", show_alert=True)
+        return
+        
+    async with db.pool.acquire() as connection:
+        group = await connection.fetchrow("SELECT days FROM groups WHERE name = $1", group_name)
+    
+    if not group or not group['days']:
+        await callback.answer("Guruh yoki uning kunlari belgilanmagan.", show_alert=True)
+        return
+        
+    import datetime
+    import pytz
+    WEEKDAYS_UZ = ["dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba", "yakshanba"]
+    tz = pytz.timezone('Asia/Tashkent')
+    today_name = WEEKDAYS_UZ[datetime.datetime.now(tz).weekday()]
+    
+    if today_name not in group['days'].lower():
+        await callback.answer(f"❌ Xatolik: Siz o'quvchiga faqat dars kunlarida baho qo'ya olasiz.\nBu guruhning dars kunlari: {group['days']}", show_alert=True)
+        return
+
+    back_to_list = callback.data.startswith("score:")
+    group_param = data[2] if back_to_list and len(data) > 2 else group_name
+    
+    await state.update_data(score_student_id=student_id, score_group_id=group_param, back_to_list=back_to_list)
     await callback.message.answer(f"O'quvchi uchun ballni kiriting (0-25):")
     await state.set_state(AdminScore.waiting_for_score)
 
@@ -355,12 +385,19 @@ async def process_score(message: Message, state: FSMContext, db: Database):
         
     data = await state.get_data()
     student_id = data['score_student_id']
-    group_id = data['score_group_id']
+    group_name = data.get('score_group_id')
+    back_to_list = data.get('back_to_list', False)
     
     lesson_num, total_score = await db.add_score(student_id, score)
     await state.clear()
     
-    await message.answer(f"✅ Ball muvaffaqiyatli saqlandi! (Dars {lesson_num}/6)")
+    reply_kb = None
+    if back_to_list and group_name:
+        reply_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"score_list:{group_name}")]])
+    else:
+        reply_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"astud_prof:{student_id}")]])
+        
+    await message.answer(f"✅ Ball muvaffaqiyatli saqlandi! (Dars {lesson_num}/6)", reply_markup=reply_kb)
     
     try:
         await message.bot.send_message(
@@ -373,6 +410,19 @@ async def process_score(message: Message, state: FSMContext, db: Database):
         
     if lesson_num == 6:
         level, emoji = await db.complete_cycle(student_id, total_score)
+        
+        # Notify Teacher
+        try:
+            student = await db.get_user(student_id)
+            student_name = f"{student['first_name']} {student['last_name']}" if student else "O'quvchi"
+            await message.bot.send_message(
+                message.from_user.id,
+                f"🏆 **Sikl yakunlandi!**\nO'quvchi {student_name} 6 ta dars yakuniga ko'ra **{total_score}/150** ball to'pladi. Darajasi: **{level} {emoji}**."
+            )
+        except Exception:
+            pass
+
+        # Notify Student
         try:
             await message.bot.send_message(
                 student_id,
@@ -420,32 +470,6 @@ async def show_admin_rules(message: Message):
     from rules.adminrule import ADMIN_RULES_TEXT
     await message.answer(ADMIN_RULES_TEXT, parse_mode="Markdown")
 
-@router.callback_query(F.data.startswith("astud_set_lvl:"))
-async def process_astud_set_lvl(callback: CallbackQuery):
-    student_id = int(callback.data.split(":")[1])
-    
-    levels = [
-        "Excellent 🥇", "Very Good 🟢", "Good 🟡", 
-        "Needs Improvement 🟠", "Weak 🔴"
-    ]
-    
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=lvl, callback_data=f"astud_save_lvl:{student_id}:{lvl}")] for lvl in levels
-    ])
-    kb.inline_keyboard.append([InlineKeyboardButton(text="🔙 Bekor qilish", callback_data="cancel_astud_edit")])
-    
-    await callback.message.answer("🎓 O'quvchining joriy darajasini (o'zlashtirishini) belgilang:", reply_markup=kb)
-    await callback.answer()
-
-@router.callback_query(F.data.startswith("astud_save_lvl:"))
-async def process_astud_save_lvl(callback: CallbackQuery, db: Database):
-    parts = callback.data.split(":")
-    student_id = int(parts[1])
-    new_lvl = parts[2]
-    
-    await db.set_performance_grade(student_id, new_lvl)
-    await callback.answer(f"Daraja {new_lvl} ga o'zgartirildi!", show_alert=True)
-    await callback.message.delete()
 
 @router.callback_query(F.data.startswith("astud_eng_lvl:"))
 async def process_astud_eng_lvl(callback: CallbackQuery):
