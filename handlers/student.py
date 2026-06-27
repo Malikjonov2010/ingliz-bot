@@ -246,8 +246,17 @@ async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
         await message.answer("Siz hali ro'yxatdan o'tmagansiz.")
         return
         
-    await message.answer("Nima uchun akkauntingizni o'chirmoqchisiz? Iltimos, sababini yozib yuboring:")
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+        resize_keyboard=True
+    )
+    await message.answer("Nima uchun akkauntingizni o'chirmoqchisiz? Iltimos, sababini yozib yuboring:", reply_markup=keyboard)
     await state.set_state(Deletion.waiting_for_reason)
+
+@router.message(F.text == "⬅️ Orqaga", StateFilter(Deletion.waiting_for_reason, Deletion.waiting_for_code))
+async def cancel_deletion(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("❌ Amaliyot bekor qilindi.", reply_markup=get_student_keyboard())
 
 @router.message(Deletion.waiting_for_reason)
 async def process_deletion_reason(message: Message, state: FSMContext, db: Database):
@@ -259,7 +268,11 @@ async def process_deletion_reason(message: Message, state: FSMContext, db: Datab
         
     user = await db.get_user(message.from_user.id)
     
-    await message.answer("Sizning so'rovingiz adminga yuborildi. Kuting...")
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+        resize_keyboard=True
+    )
+    await message.answer("Sizning so'rovingiz adminga yuborildi. Kuting...", reply_markup=keyboard)
     
     admin_text = f"🗑 **Akkauntni o'chirish so'rovi:**\nO'quvchi: {user['first_name']} {user['last_name']}\nSabab: {reason}\nID: {user['telegram_id']}"
     
