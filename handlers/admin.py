@@ -289,13 +289,17 @@ async def eval_grp_opts(callback: CallbackQuery):
     level = callback.data.split(":")[1]
     
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="SMART GROUP", callback_data=f"save_g_lvl:{level}:SMART GROUP")],
-        [InlineKeyboardButton(text="MIDDLE CLASS", callback_data=f"save_g_lvl:{level}:MIDDLE CLASS")],
-        [InlineKeyboardButton(text="LAZY TEAM", callback_data=f"save_g_lvl:{level}:LAZY TEAM")],
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")]
+        [InlineKeyboardButton(text="🧠 SMART GROUP",  callback_data=f"save_g_lvl:{level}:SMART GROUP")],
+        [InlineKeyboardButton(text="📚 MIDDLE CLASS", callback_data=f"save_g_lvl:{level}:MIDDLE CLASS")],
+        [InlineKeyboardButton(text="😴 LAZY TEAM",   callback_data=f"save_g_lvl:{level}:LAZY TEAM")],
+        [InlineKeyboardButton(text="🔙 Orqaga",       callback_data=f"admin_lvl:{level}")]
     ])
     
-    await callback.message.edit_text(f"🏫 **{level}** guruhi(darajasi) uchun nom/daraja tanlang:", reply_markup=kb)
+    await callback.message.edit_text(
+        f"🏫 <b>{level}</b> guruhi uchun nom/daraja tanlang:",
+        parse_mode="HTML",
+        reply_markup=kb
+    )
 
 @router.callback_query(F.data.startswith("save_g_lvl:"))
 async def save_grp_lvl(callback: CallbackQuery, db: Database):
@@ -359,10 +363,30 @@ async def process_astud_score_info(callback: CallbackQuery, db: Database):
     total_score = stats.get('current_cycle_total', 0)
     lesson_num = len(scores)
     
+    current_level_str = "Hali dars o'tilmagan ⚪️"
+    if lesson_num > 0:
+        max_possible = lesson_num * 25
+        percentage = (total_score / max_possible) * 100
+        if percentage >= 93.33:
+            current_level_str = "Excellent 🥇"
+        elif percentage >= 80.0:
+            current_level_str = "Very Good 🟢"
+        elif percentage >= 66.66:
+            current_level_str = "Good 🟡"
+        elif percentage >= 53.33:
+            current_level_str = "Needs Improvement 🟠"
+        else:
+            current_level_str = "Weak 🔴"
+    
+    scores_list_text = ""
+    if scores:
+        scores_list_text = "\n".join([f"📖 {s['lesson_number']}-dars: {s['score']} ball" for s in scores]) + "\n"
+        
     text = (f"📊 **O'quvchi o'zlashtirishi:**\n\n"
-            f"O'tilgan darslar soni: {lesson_num}/6\n"
+            f"O'tilgan darslar soni: {lesson_num}/6\n\n"
+            f"{scores_list_text}\n"
             f"Joriy sikl bo'yicha to'plangan ball: {total_score}/150\n"
-            f"Hozirgi holati (darajasi): {stats.get('student_level', 'Belgilanmagan')}\n")
+            f"Hozirgi holati (darajasi): {current_level_str}\n")
     
     kb = []
     
@@ -537,8 +561,20 @@ async def process_astud_save_eng_lvl(callback: CallbackQuery, db: Database):
     new_lvl = parts[2]
     
     await db.set_student_level(student_id, new_lvl)
-    await callback.answer(f"Ingliz tili darajasi {new_lvl} ga o'zgartirildi!", show_alert=True)
+    await callback.answer(f"✅ Ingliz tili darajasi {new_lvl} ga o'zgartirildi!", show_alert=True)
+    
+    # Delete the level-selection message and go back to profile
     await callback.message.delete()
+    
+    # Now send the refreshed student profile
+    from utils import get_student_profile_text, get_student_profile_keyboard
+    student = await db.get_user(student_id)
+    if student:
+        text = get_student_profile_text(student)
+        level = student.get('level')
+        back_cb = f"admin_lvl:{level}" if level else "admin_levels_menu"
+        kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
+        await callback.message.answer(text, parse_mode="Markdown", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("astud_bio:"))
 async def process_astud_bio(callback: CallbackQuery, state: FSMContext):
