@@ -90,11 +90,13 @@ async def admin_view_groups(callback: CallbackQuery, db: Database):
             text=f"📈 {g['name']} darajasini o'zgartirish",
             callback_data=f"eval_grp:{g['name']}"
         )])
-    kb.append([InlineKeyboardButton(text="✏️ Guruhni tahrirlash", callback_data="edit_group_menu")])
-    kb.append([InlineKeyboardButton(text="➕ Guruh qo'shish",     callback_data="admin_add_group")])
+    kb.append([InlineKeyboardButton(text="✏️ Guruhni tahrirlash",  callback_data="edit_group_menu")])
+    kb.append([InlineKeyboardButton(text="🗑 Guruhni o'chirish",   callback_data="delete_group_menu")])
+    kb.append([InlineKeyboardButton(text="➕ Guruh qo'shish",      callback_data="admin_add_group")])
 
     await callback.message.edit_text(text, parse_mode="HTML",
                                      reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+
 
 
 # ── Edit existing group ───────────────────────────────────────────────────────
@@ -405,3 +407,53 @@ async def process_admin_set_bio(message: Message, state: FSMContext, db: Databas
     from handlers.student import get_user_keyboard
     await message.answer("✅ Ustoz fikri saqlandi va o'quvchiga yuborildi!",
                          reply_markup=get_user_keyboard(message.from_user.id))
+
+
+# ── Delete group ──────────────────────────────────────────────────────────────
+@router.callback_query(F.data == "delete_group_menu")
+async def delete_group_menu(callback: CallbackQuery, db: Database):
+    groups = await db.get_all_groups()
+    if not groups:
+        await callback.answer("Guruhlar yo'q.", show_alert=True)
+        return
+    kb = [[InlineKeyboardButton(
+               text=f"🗑 {g['name']}",
+               callback_data=f"del_grp_confirm:{g['id']}"
+           )] for g in groups]
+    kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_view_groups")])
+    await callback.message.edit_text(
+        "🗑 <b>Qaysi guruhni o'chirmoqchisiz?</b>\n"
+        "<i>O'chirilgan guruh o'quvchilar ro'yxatidan ham chiqariladi.</i>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb)
+    )
+
+
+@router.callback_query(F.data.startswith("del_grp_confirm:"))
+async def del_grp_confirm(callback: CallbackQuery, db: Database):
+    group_id = int(callback.data.split(":")[1])
+    group    = await db.get_group(group_id)
+    if not group:
+        await callback.answer("Guruh topilmadi.", show_alert=True)
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Ha, o'chirish",  callback_data=f"del_grp_do:{group_id}")],
+        [InlineKeyboardButton(text="❌ Bekor qilish",   callback_data="delete_group_menu")],
+    ])
+    await callback.message.edit_text(
+        f"⚠️ <b>{group['name']}</b> guruhini o'chirishni tasdiqlaysizmi?\n\n"
+        "Bu guruhga biriktirilgan barcha o'quvchilar guruhsiz qoladi (o'chirilmaydi).",
+        parse_mode="HTML",
+        reply_markup=kb
+    )
+
+
+@router.callback_query(F.data.startswith("del_grp_do:"))
+async def del_grp_do(callback: CallbackQuery, db: Database):
+    group_id = int(callback.data.split(":")[1])
+    group    = await db.get_group(group_id)
+    name     = group['name'] if group else str(group_id)
+    await db.delete_group(group_id)
+    await callback.answer(f"✅ '{name}' guruhi o'chirildi!", show_alert=True)
+    # Guruhlar ro'yxatiga qaytamiz
+    await admin_view_groups(callback, db)

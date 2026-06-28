@@ -96,6 +96,16 @@ class Database:
         async with self.pool.acquire() as connection:
             await connection.execute(query, group_id, name, days, time)
 
+    async def delete_group(self, group_id: int) -> None:
+        """Delete a group and unlink all students from it."""
+        async with self.pool.acquire() as connection:
+            # O'quvchilarni guruhdan uzib qo'yamiz (o'chirilmaydi, faqat group_id NULL bo'ladi)
+            await connection.execute(
+                "UPDATE users SET group_id = NULL WHERE group_id = $1", group_id
+            )
+            await connection.execute("DELETE FROM groups WHERE id = $1", group_id)
+
+
     async def mark_attendance(self, user_id: int, today_date, is_present: bool = True, reason: str = None) -> tuple[bool, str]:
         """Attempts to mark attendance. Returns (Success, Message)."""
         async with self.pool.acquire() as connection:
