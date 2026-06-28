@@ -332,6 +332,49 @@ async def score_students_list(callback: CallbackQuery, db: Database):
     kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"admin_lvl:{level}")])
     await callback.message.edit_text("Ball qo'yish uchun o'quvchini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
+@router.callback_query(F.data.startswith("astud_prof:"))
+async def process_astud_prof(callback: CallbackQuery, db: Database):
+    student_id = int(callback.data.split(":")[1])
+    student = await db.get_user(student_id)
+    if not student:
+        await callback.answer("O'quvchi topilmadi.", show_alert=True)
+        return
+        
+    from utils import get_student_profile_text, get_student_profile_keyboard
+    text = get_student_profile_text(student)
+    level = student.get('level')
+    back_cb = f"admin_lvl:{level}" if level else "admin_levels_menu"
+    kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
+    
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+
+@router.callback_query(F.data.startswith("astud_score_info:"))
+async def process_astud_score_info(callback: CallbackQuery, db: Database):
+    student_id = int(callback.data.split(":")[1])
+    stats = await db.get_user_stats(student_id)
+    
+    has_score = await db.has_score_today(student_id)
+    
+    scores = stats.get('current_cycle_scores', [])
+    total_score = stats.get('current_cycle_total', 0)
+    lesson_num = len(scores)
+    
+    text = (f"📊 **O'quvchi o'zlashtirishi:**\n\n"
+            f"O'tilgan darslar soni: {lesson_num}/6\n"
+            f"Joriy sikl bo'yicha to'plangan ball: {total_score}/150\n"
+            f"Hozirgi holati (darajasi): {stats.get('student_level', 'Belgilanmagan')}\n")
+    
+    kb = []
+    
+    if not has_score:
+        kb.append([InlineKeyboardButton(text="➕ Bugun uchun ball qo'yish (0-25)", callback_data=f"astud_score_add:{student_id}")])
+    else:
+        text += "\n✅ *Bugungi dars uchun ball qo'yilgan.*"
+        
+    kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"astud_prof:{student_id}")])
+    
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+
 @router.callback_query(lambda c: c.data.startswith("score:") or c.data.startswith("astud_score_add:"))
 async def ask_for_score(callback: CallbackQuery, state: FSMContext, db: Database):
     data = callback.data.split(":")

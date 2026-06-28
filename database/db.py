@@ -142,6 +142,11 @@ class Database:
             
             return lesson_num, total
             
+    async def has_score_today(self, user_id: int) -> bool:
+        async with self.pool.acquire() as connection:
+            count = await connection.fetchval("SELECT COUNT(*) FROM scores WHERE user_id = $1 AND date = CURRENT_DATE", user_id)
+            return count > 0
+            
     async def complete_cycle(self, user_id: int, total_score: int) -> tuple[str, str]:
         """Completes a cycle and returns (Badge Name, Emoji)."""
         percentage = (total_score / 150) * 100
