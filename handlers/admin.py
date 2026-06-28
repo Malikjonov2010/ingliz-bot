@@ -6,7 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from states.register_states import AdminDeletion, Deletion, AdminGroupCreation, AdminBroadcast, AdminGroupLevel, AdminStudentLevel
 from datetime import date
 from database.db import Database
-from config import ADMIN_IDS
+from config import ADMIN_IDS, TEACHER_IDS, is_teacher, is_pure_admin
 from handlers.student import get_user_keyboard
 import asyncio
 
@@ -57,20 +57,23 @@ async def reject_student(callback: CallbackQuery, db: Database):
 
 @router.message(Command("admin"))
 async def admin_panel(message: Message, db: Database):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("Siz admin emassiz.")
+    uid = message.from_user.id
+    if uid not in ADMIN_IDS:
+        await message.answer("⚠️ Siz admin emassiz.")
         return
-        
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="👥 Guruhni baholash", callback_data="admin_eval_groups")],
-            [InlineKeyboardButton(text="👤 O'quvchini baholash", callback_data="admin_eval_students")],
-            [InlineKeyboardButton(text="📢 Hammaga xabar yuborish", callback_data="admin_broadcast")],
-            [InlineKeyboardButton(text="📈 Guruhlarni darajasini belgilash", callback_data="admin_set_levels")]
-        ]
-    )
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Guruhni baholash",                callback_data="admin_eval_groups")],
+        [InlineKeyboardButton(text="👤 O'quvchini baholash",             callback_data="admin_eval_students")],
+        [InlineKeyboardButton(text="📊 Guruhlar darajasini belgilash",   callback_data="admin_set_levels")],
+        [InlineKeyboardButton(text="📢 Hammaga xabar yuborish",          callback_data="admin_broadcast")],
+    ])
     
-    await message.answer("👨‍🏫 **O'qituvchi Paneli**\nQuyidagilardan birini tanlang:", parse_mode="Markdown", reply_markup=keyboard)
+    await message.answer(
+        "👨‍🏫 <b>Ustoz (Admin) Paneli</b>\n"
+        "Quyidagilardan birini tanlang:",
+        parse_mode="HTML", reply_markup=keyboard
+    )
 
 # ================= BROADCAST =================
 @router.message(F.text == "📢 Hammaga xabar yuborish", StateFilter(None))
