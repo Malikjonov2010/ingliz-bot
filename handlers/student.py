@@ -428,6 +428,10 @@ async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
         await message.answer("Siz hali ro'yxatdan o'tmagansiz.")
         return
         
+    if user['role'] != 'student':
+        await message.answer("⚠️ Ushbu buyruq faqat o'quvchilar uchun ishlaydi.")
+        return
+        
     keyboard = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
         resize_keyboard=True
@@ -559,6 +563,19 @@ async def show_student_rules(message: Message):
 
 @router.message()
 async def catch_all_messages(message: Message, state: FSMContext, db: Database):
+    user = await db.get_user(message.from_user.id)
+    if user and user.get('deletion_code') and message.text:
+        text = message.text.strip()
+        if text == user['deletion_code']:
+            await db.delete_user(message.from_user.id)
+            from aiogram.types import ReplyKeyboardRemove
+            await message.answer("Akkauntingiz muvaffaqiyatli o'chirildi. /start orqali qayta ro'yxatdan o'tishingiz mumkin.", reply_markup=ReplyKeyboardRemove())
+            await state.clear()
+            return
+        elif text.isdigit():
+            await message.answer("❌ Noto'g'ri tasdiqlash kodi kiritildi. Iltimos, qayta urinib ko'ring.")
+            return
+
     current_state = await state.get_state()
     if current_state is None:
         await message.answer("⚠️ Kechirasiz, men bu xabarni tushunmadim. Iltimos, menyudagi tugmalardan foydalaning.")
