@@ -176,7 +176,8 @@ async def days_done(callback: CallbackQuery, state: FSMContext):
     await state.update_data(group_days=days_str)
     await callback.message.edit_text(
         "⏰ <b>Dars vaqtini kiriting</b> (masalan: <code>14:00</code>):\n\n"
-        "Format: SS:MM — 24 soatlik ko'rinishda.",
+        "Format: SS:MM — 24 soatlik ko'rinishda.\n"
+        "<i>(Vaqt 08:00 dan 18:00 gacha bo'lishi kerak)</i>",
         parse_mode="HTML"
     )
     await state.set_state(AdminGroupCreation.waiting_for_time)
@@ -192,8 +193,19 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
         await message.answer(
             "❌ <b>Noto'g'ri format!</b>\n\n"
             "Vaqtni <b>SS:MM</b> ko'rinishida kiriting.\n"
-            "Misol: <code>09:00</code> yoki <code>18:30</code>\n\n"
+            "Misol: <code>09:00</code> yoki <code>18:00</code>\n\n"
             "⚠️ 24 soatlik tizimda, 2 raqam ikki nuqta 2 raqam bo'lishi shart.",
+            parse_mode="HTML"
+        )
+        return
+
+    # Validate time range (08:00 - 18:00)
+    hours, minutes = map(int, time_text.split(":"))
+    if hours < 8 or hours > 18 or (hours == 18 and minutes > 0):
+        await message.answer(
+            "⚠️ <b>Ruxsat etilmagan vaqt!</b>\n\n"
+            "Dars vaqti faqat <b>08:00</b> dan <b>18:00</b> gacha oraliqda bo'lishi kerak.\n"
+            "Iltimos, qaytadan kiriting:",
             parse_mode="HTML"
         )
         return
