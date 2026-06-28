@@ -423,13 +423,13 @@ async def channels_info(message: Message):
 
 @router.message(Command("delete_account"), StateFilter(None))
 async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
+    if message.from_user.id in ADMIN_IDS:
+        await message.answer("⚠️ Ushbu buyruq faqat o'quvchilar uchun ishlaydi.")
+        return
+
     user = await db.get_user(message.from_user.id)
     if not user:
         await message.answer("Siz hali ro'yxatdan o'tmagansiz.")
-        return
-        
-    if user['role'] != 'student':
-        await message.answer("⚠️ Ushbu buyruq faqat o'quvchilar uchun ishlaydi.")
         return
         
     keyboard = ReplyKeyboardMarkup(

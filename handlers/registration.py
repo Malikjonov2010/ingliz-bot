@@ -15,14 +15,13 @@ async def cmd_start(message: Message, state: FSMContext, db: Database):
     await state.clear()
     
     if message.from_user.id in ADMIN_IDS:
-        from handlers.admin import admin_panel
+        from handlers.student import get_user_keyboard
         await message.answer(
             f"👋 Assalomu alaykum, <b>Ustoz (Admin)</b>!\n\n"
             f"Siz tizimga admin sifatida kirdingiz. Quyidagi panel orqali botni boshqarishingiz mumkin:",
             parse_mode="HTML",
-            reply_markup=ReplyKeyboardRemove()
+            reply_markup=get_user_keyboard(message.from_user.id)
         )
-        await admin_panel(message, db)
         return
 
     user = await db.get_user(message.from_user.id)
