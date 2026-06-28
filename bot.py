@@ -32,7 +32,9 @@ async def main():
     dp.workflow_data.update({'db': db})
 
     from handlers import registration, student, admin, admin_groups
+    from handlers import premium as premium_handler
     dp.include_router(registration.router)
+    dp.include_router(premium_handler.router)
     dp.include_router(admin.router)
     dp.include_router(admin_groups.router)
     dp.include_router(student.router)
@@ -40,7 +42,8 @@ async def main():
     from aiogram.types import BotCommand
     commands = [
         BotCommand(command="start", description="Botni ishga tushirish / Qayta ro'yxatdan o'tish"),
-        BotCommand(command="delete_account", description="Akkauntni o'chirish")
+        BotCommand(command="delete_account", description="Akkauntni o'chirish"),
+        BotCommand(command="mypremium", description="Premium ma'lumotlarim"),
     ]
     await bot.set_my_commands(commands)
 

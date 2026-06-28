@@ -43,3 +43,30 @@ class AdminPersonalMessage(StatesGroup):
 class AdminSetBio(StatesGroup):
     waiting_for_bio = State()
     student_id = State()
+
+# ============================================================
+# PREMIUM TIZIMI STATELARI
+# ============================================================
+
+class PremiumPayment(StatesGroup):
+    waiting_for_amount = State()
+    waiting_for_comment = State()
+    waiting_for_photo = State()
+
+class PremiumChat(StatesGroup):
+    waiting_for_message = State()
+
+class AdminPremiumMsg(StatesGroup):
+    waiting_for_message = State()
+    target_user_id = State()
+
+class AdminMonthlyFee(StatesGroup):
+    waiting_for_fee = State()
+    waiting_for_deadline = State()
+    waiting_for_comment = State()
+    group_id = State()
+
+class AdminBlockMsg(StatesGroup):
+    waiting_for_message = State()
+    target_user_id = State()
+

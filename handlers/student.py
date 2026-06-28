@@ -16,7 +16,7 @@ def get_user_keyboard(user_id: int):
             keyboard=[
                 [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")],
                 [KeyboardButton(text="👤 O'quvchilarni ko'rish"), KeyboardButton(text="🏫 Guruhlarni boshqarish")],
-                [KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
+                [KeyboardButton(text="💰 Oylik to'lov"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
             ],
             resize_keyboard=True
         )
@@ -26,7 +26,8 @@ def get_user_keyboard(user_id: int):
                 [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
                 [KeyboardButton(text="📈 Darslar o'zlashtirishim"), KeyboardButton(text="🎓 Sizning guruh darajangiz")],
                 [KeyboardButton(text="🏆 O'zingizni darajangiz"), KeyboardButton(text="📩 Ustozga xabar yuborish")],
-                [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
+                [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")],
+                [KeyboardButton(text="💰 Oylik to'lov"), KeyboardButton(text="💎 Premium")]
             ],
             resize_keyboard=True
         )
@@ -346,13 +347,43 @@ async def show_student_level(message: Message, db: Database):
 
 @router.message(F.text == "📩 Ustozga xabar yuborish", StateFilter(None))
 async def msg_teacher(message: Message, db: Database, state: FSMContext):
-    if not await db.can_send_teacher_message(message.from_user.id):
-        await message.answer("🚫 Kechirasiz, siz bugun ustozga 3 marta xabar yuborib bo'ldingiz.\nErtaga yana urinib ko'ring!")
-        return
+    user_id = message.from_user.id
+    is_premium = await db.is_premium(user_id)
+
+    # Limit tekshiruvi
+    if is_premium:
+        if not await db.can_send_teacher_message_premium(user_id):
+            await message.answer(
+                "🚫 Siz bugun ustozga 10 marta xabar yuborib bo'ldingiz.\n"
+                "💎 Premium limit: kuniga 10 ta xabar.\nErtaga yana urinib ko'ring!"
+            )
+            return
+    else:
+        if not await db.can_send_teacher_message(user_id):
+            await message.answer(
+                "🚫 Kechirasiz, siz bugun ustozga 3 marta xabar yuborib bo'ldingiz.\n"
+                "Ertaga yana urinib ko'ring!\n\n"
+                "💡 <b>Premium</b> obuna bilan kuniga 10 ta xabar va kanalsiz yuborish mumkin!",
+                parse_mode="HTML"
+            )
+            return
 
     bot = message.bot
-    user_id = message.from_user.id
-    
+
+    # Premium foydalanuvchi — kanal tekshiruvisiz to'g'ridan xabar yozadi
+    if is_premium:
+        await state.set_state(TeacherMessage.waiting_for_message)
+        keyboard = ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+            resize_keyboard=True
+        )
+        await message.answer(
+            "📝 Ustozga nima demoqchisiz, yozing:\n"
+            "<i>💎 Premium: kanal obunasisiz yuborish mumkin</i>",
+            parse_mode="HTML", reply_markup=keyboard
+        )
+        return
+
     channels = [
         ("🎓 Super Teaching", "https://t.me/superteaching", "@superteaching"),
         ("📝 Muhammaddiyor Blog", "https://t.me/Muhammaddiyor_blog", "@Muhammaddiyor_blog"),
@@ -361,7 +392,7 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
         ("🎬 Bomb Kinolar", "https://t.me/Tarjimabombakinolar", "@Tarjimabombakinolar"),
         ("🔥 Epic Brand", "https://t.me/Epic_brand", "@Epic_brand")
     ]
-    
+
     unsubbed_buttons = []
     for name, url, username in channels:
         try:
@@ -370,20 +401,17 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
                 unsubbed_buttons.append(InlineKeyboardButton(text=name, url=url))
         except Exception:
             unsubbed_buttons.append(InlineKeyboardButton(text=name, url=url))
-            
+
     if unsubbed_buttons:
         kb_rows = [unsubbed_buttons[i:i+2] for i in range(0, len(unsubbed_buttons), 2)]
         kb_rows.append([InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="check_teacher_sub")])
         keyboard = InlineKeyboardMarkup(inline_keyboard=kb_rows)
-        
         if len(unsubbed_buttons) == len(channels):
             text = "Ustozga xabar yuborish uchun **barcha** kanal va guruhlarga obuna bo'lishingiz shart!\n\nObuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
         else:
             text = "Ustozga xabar yuborish uchun quyidagi **qolib ketgan** kanallarga obuna bo'ling:\n\nObuna bo'lgach, **✅ Tasdiqlash** tugmasini bosing."
-            
         await message.answer(text, reply_markup=keyboard, parse_mode="Markdown", disable_web_page_preview=True)
     else:
-        # All subbed
         await state.set_state(TeacherMessage.waiting_for_message)
         keyboard = ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
@@ -567,6 +595,29 @@ async def show_student_rules(message: Message):
 @router.message()
 async def catch_all_messages(message: Message, state: FSMContext, db: Database):
     user = await db.get_user(message.from_user.id)
+
+    # Bloklangan foydalanuvchi tekshiruvi (davomat bundan mustasno)
+    if user and message.from_user.id not in ADMIN_IDS:
+        if await db.is_blocked(message.from_user.id):
+            blocked_row = await db.pool.acquire()
+            async with db.pool.acquire() as conn:
+                block_info = await conn.fetchrow(
+                    "SELECT blocked_until, block_reason FROM users WHERE telegram_id = $1",
+                    message.from_user.id
+                )
+            if block_info and block_info['blocked_until']:
+                import pytz
+                tz_uz = pytz.timezone('Asia/Tashkent')
+                until_str = block_info['blocked_until'].astimezone(tz_uz).strftime("%d.%m.%Y")
+                await message.answer(
+                    f"🚫 <b>Hisobingiz bloklangan!</b>\n\n"
+                    f"📅 <b>Ochilish sanasi:</b> {until_str}\n"
+                    f"📝 <b>Sabab:</b> {block_info.get('block_reason', '—')}\n\n"
+                    f"Davomat funksiyasidan foydalanishingiz mumkin.",
+                    parse_mode="HTML"
+                )
+            return
+
     if user and user.get('deletion_code') and message.text:
         text = message.text.strip()
         if text == user['deletion_code']:

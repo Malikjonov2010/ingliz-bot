@@ -109,3 +109,65 @@ CREATE TABLE IF NOT EXISTS teacher_message_logs (
     date DATE NOT NULL DEFAULT CURRENT_DATE
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS performance_grade VARCHAR(50);
+
+-- ============================================================
+-- PREMIUM TIZIMI UCHUN YANGI USTUNLAR VA JADVALLAR
+-- ============================================================
+
+-- Users jadvaliga blok va referral ustunlar
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_until TIMESTAMP WITH TIME ZONE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS block_reason TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(30);
+
+-- Groups jadvaliga oylik to'lov ustunlar
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS monthly_fee TEXT;
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS fee_deadline VARCHAR(100);
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS fee_comment TEXT;
+
+-- Premium so'rovlar jadvali (foydalanuvchi to'lov yuboradi)
+CREATE TABLE IF NOT EXISTS premium_requests (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+    amount TEXT,
+    comment TEXT,
+    photo_file_id TEXT,
+    status VARCHAR(20) DEFAULT 'pending',
+    attempt_count INT DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_premium_requests_user ON premium_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_premium_requests_status ON premium_requests(status);
+
+-- Faol premium foydalanuvchilar
+CREATE TABLE IF NOT EXISTS premium_users (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE UNIQUE,
+    activated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    activated_by BIGINT
+);
+CREATE INDEX IF NOT EXISTS idx_premium_users_expires ON premium_users(expires_at);
+
+-- Referral tizimi
+CREATE TABLE IF NOT EXISTS referral_uses (
+    id SERIAL PRIMARY KEY,
+    referral_code VARCHAR(30) NOT NULL,
+    used_by BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE UNIQUE,
+    owner_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+    is_staying BOOLEAN DEFAULT FALSE,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_referral_code ON referral_uses(referral_code);
+CREATE INDEX IF NOT EXISTS idx_referral_owner ON referral_uses(owner_id);
+
+-- AI suhbat tarixi (so'nggi 10 ta xabar saqlanadi)
+CREATE TABLE IF NOT EXISTS ai_chat_history (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+    role VARCHAR(10) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ai_chat_user ON ai_chat_history(user_id, created_at);
+

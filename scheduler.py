@@ -72,3 +72,52 @@ async def check_schedules(bot, db):
 
 def start_scheduler(bot, db):
     asyncio.create_task(check_schedules(bot, db))
+    asyncio.create_task(check_premium_expiry(bot, db))
+    asyncio.create_task(check_blocks_expiry(bot, db))
+
+
+async def check_premium_expiry(bot, db):
+    """Har 30 daqiqada premium muddatini tekshiradi va tugaganlarni o'chiradi."""
+    while True:
+        try:
+            expired_list = await db.get_expired_premium_users()
+            for row in expired_list:
+                user_id = row['user_id']
+                await db.deactivate_premium(user_id)
+                try:
+                    await bot.send_message(
+                        user_id,
+                        "⏳ <b>Premiumingiz muddati tugadi!</b>\n\n"
+                        "Premium imkoniyatlar o'chirildi.\n"
+                        "Davom ettirish uchun «💎 Premium» tugmasini bosib yangilang!",
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    logging.warning(f"Premium expiry xabari yuborilmadi {user_id}: {e}")
+        except Exception as e:
+            logging.error(f"check_premium_expiry xatosi: {e}")
+        await asyncio.sleep(1800)  # Har 30 daqiqada
+
+
+async def check_blocks_expiry(bot, db):
+    """Har soatda bloklangan foydalanuvchilarni tekshiradi va muddati o'tganlarni blokdan chiqaradi."""
+    while True:
+        try:
+            to_unblock = await db.get_blocked_users_to_unblock()
+            for row in to_unblock:
+                user_id = row['telegram_id']
+                await db.unblock_user(user_id)
+                try:
+                    await bot.send_message(
+                        user_id,
+                        "🔓 <b>Bloklashingiz muddati tugadi!</b>\n\n"
+                        "Botdan to'liq foydalanishingiz mumkin.\n"
+                        "Bundan keyin halol foydalaning! 🙏",
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    logging.warning(f"Unblock xabari yuborilmadi {user_id}: {e}")
+        except Exception as e:
+            logging.error(f"check_blocks_expiry xatosi: {e}")
+        await asyncio.sleep(3600)  # Har soatda
+

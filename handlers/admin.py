@@ -67,6 +67,7 @@ async def admin_panel(message: Message, db: Database):
         [InlineKeyboardButton(text="👤 O'quvchini baholash",             callback_data="admin_eval_students")],
         [InlineKeyboardButton(text="📊 Guruhlar darajasini belgilash",   callback_data="admin_set_levels")],
         [InlineKeyboardButton(text="📢 Hammaga xabar yuborish",          callback_data="admin_broadcast")],
+        [InlineKeyboardButton(text="💰 Oylik to'lov boshqaruvi",         callback_data="admin_monthly_fee")],
     ])
     
     await message.answer(
@@ -74,6 +75,7 @@ async def admin_panel(message: Message, db: Database):
         "Quyidagilardan birini tanlang:",
         parse_mode="HTML", reply_markup=keyboard
     )
+
 
 # ================= BROADCAST =================
 @router.message(F.text == "📢 Hammaga xabar yuborish", StateFilter(None))

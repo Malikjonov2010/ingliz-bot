@@ -13,6 +13,15 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, db: Database):
     await state.clear()
+
+    # Referral kod tekshiruvi: /start ref_XXXXX
+    start_args = message.text.split(maxsplit=1)
+    if len(start_args) > 1 and start_args[1].startswith("ref_"):
+        referral_code = start_args[1]
+        try:
+            await db.record_referral(referral_code, message.from_user.id)
+        except Exception:
+            pass
     
     if message.from_user.id in ADMIN_IDS:
         from handlers.student import get_user_keyboard
@@ -190,11 +199,17 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
         # Set status to active so they can use the bot immediately
         await db.update_user_status(user_id, 'active')
         
+        # Ro'yxatdan o'tgach referral staying ni belgilaymiz
+        try:
+            await db.mark_referral_staying(user_id)
+        except Exception:
+            pass
+
         await state.clear()
         
         from handlers.student import get_user_keyboard
         
-        success_text = "🎉 **Tasdiqlangandan so'ng sizning profilingiz ochildi va pastdagi tugmalar orqali foydalanishingiz mumkin.**"
+        success_text = "🎉 **Tabriklaymiz! Botga xush kelibsiz!**\n\nPastdagi menyudan foydalanishingiz mumkin."
         
         await callback.message.delete()
         await callback.message.answer(success_text, reply_markup=get_user_keyboard(callback.from_user.id), parse_mode="Markdown")
