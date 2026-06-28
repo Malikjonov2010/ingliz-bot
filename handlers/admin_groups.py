@@ -4,7 +4,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from database.db import Database
-from config import ADMIN_IDS
+from config import ADMIN_IDS, TEACHER_IDS
 import re
 
 router = Router()
@@ -251,6 +251,7 @@ async def view_students_menu(message: Message, db: Database):
         return
 
     students = await db.get_active_users()
+    students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
     if not students:
         await message.answer("Hozircha ro'yxatdan o'tgan o'quvchilar yo'q.")
         return
@@ -263,7 +264,7 @@ async def view_students_menu(message: Message, db: Database):
         )])
 
     await message.answer(
-        "👤 <b>Barcha o'quvchilar ro'yxati:</b>\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:",
+        f"👤 <b>Barcha o'quvchilar ro'yxati ({len(students)} ta):</b>\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
         parse_mode="HTML"
     )
@@ -272,6 +273,7 @@ async def view_students_menu(message: Message, db: Database):
 @router.callback_query(F.data == "astud_list")
 async def back_to_astud_list(callback: CallbackQuery, db: Database):
     students = await db.get_active_users()
+    students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
     kb = []
     for s in students[:90]:
         kb.append([InlineKeyboardButton(
@@ -279,7 +281,7 @@ async def back_to_astud_list(callback: CallbackQuery, db: Database):
             callback_data=f"astud:{s['telegram_id']}"
         )])
     await callback.message.edit_text(
-        "👤 <b>Barcha o'quvchilar ro'yxati:</b>\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:",
+        f"👤 <b>Barcha o'quvchilar ro'yxati ({len(students)} ta):</b>\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
         parse_mode="HTML"
     )

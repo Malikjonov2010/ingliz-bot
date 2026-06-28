@@ -183,7 +183,8 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
             phone_number=data.get('phone_number', ''),
             group_id=data.get('group_id'),
             level=data.get('level', ''),
-            days=data.get('days_json', '[]')
+            days=data.get('days_json', '[]'),
+            username=callback.from_user.username
         )
         
         # Set status to active so they can use the bot immediately
@@ -204,10 +205,12 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
     # Notify admins asynchronously
     profile_url = f"tg://user?id={user_id}"
     admin_text = f"🆕 **Yangi O'quvchi**\n\n" \
-                 f"👤 **O'quvchi:** [{data['first_name']} {data['last_name']}]({profile_url})\n" \
+                 f"👤 **O'quvchi:** {data['first_name']} {data['last_name']}\n" \
+                 f"**Username:** @{callback.from_user.username if callback.from_user.username else 'Yo\\'q'}\n" \
                  f"📅 **Yosh:** {data['age']}\n" \
                  f"📞 **Raqam:** {data['phone_number']}\n" \
                  f"🆔 **ID:** `{user_id}`\n" \
+                 f"**Profil:** [{data['first_name']}]({profile_url})\n" \
                  f"📚 **Guruh (Kurs):** {data['level']}\n" \
                  f"⚠️ **O'quvchi darajasi:** Hali belgilanmagan\n"
     

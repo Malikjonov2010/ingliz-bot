@@ -44,13 +44,19 @@ def get_student_profile_text(student: dict, page_info: str = "") -> str:
     level_val = student.get('level', "Noma'lum")
     student_level_val = student.get('student_level', 'Belgilanmagan')
     
+    username = student.get('username')
+    username_text = f"**Username:** @{username}\n" if username else "**Username:** Yo'q\n"
+    profile_link = f"**Profil:** [{student['first_name']}](tg://user?id={student['telegram_id']})\n"
+    
     text = f"👤 **O'quvchi ma'lumotlari{page_info}:**\n\n" \
            f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
+           f"{username_text}" \
            f"**Yosh:** {student['age']}\n" \
            f"**Tel:** {student['phone_number']}\n" \
            f"**Guruh/Daraja:** {level_val}\n" \
            f"**Kunlar:** {days}\n" \
            f"**ID:** {student['telegram_id']}\n" \
+           f"{profile_link}" \
            f"**O'quvchi maqomi:** {student_level_val}" \
            f"{bio_text}"
     return text

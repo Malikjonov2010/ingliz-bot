@@ -206,6 +206,7 @@ async def view_students_in_level(callback: CallbackQuery, db: Database):
     
     async with db.pool.acquire() as connection:
         students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
+    students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
         
     if not students:
         await callback.answer("Bu darajada o'quvchilar yo'q.", show_alert=True)
@@ -239,6 +240,7 @@ async def eval_students_list(callback: CallbackQuery, db: Database):
     
     async with db.pool.acquire() as connection:
         students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
+    students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
         
     if not students:
         await callback.answer("Bu darajada o'quvchilar yo'q.", show_alert=True)
@@ -327,6 +329,7 @@ async def score_students_list(callback: CallbackQuery, db: Database):
     
     async with db.pool.acquire() as connection:
         students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active'", level)
+    students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
         
     if not students:
         await callback.answer("Bu darajada o'quvchilar yo'q.", show_alert=True)

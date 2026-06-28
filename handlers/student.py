@@ -460,7 +460,10 @@ async def process_deletion_reason(message: Message, state: FSMContext, db: Datab
     )
     await message.answer("Sizning so'rovingiz adminga yuborildi. Kuting...", reply_markup=keyboard)
     
-    admin_text = f"🗑 **Akkauntni o'chirish so'rovi:**\nO'quvchi: {user['first_name']} {user['last_name']}\nSabab: {reason}\nID: {user['telegram_id']}"
+    username = user.get('username')
+    username_text = f"@{username}" if username else "Yo'q"
+    profile_link = f"[{user['first_name']}](tg://user?id={user['telegram_id']})"
+    admin_text = f"🗑 **Akkauntni o'chirish so'rovi:**\nO'quvchi: {profile_link}\n**Username:** {username_text}\n**Sabab:** {reason}\n**ID:** `{user['telegram_id']}`"
     
     admin_keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="✅ Tasdiqlash va Kod yuborish", callback_data=f"del_req:{user['telegram_id']}")] ]

@@ -45,10 +45,10 @@ class Database:
             cols = [r[0] for r in rows]
             logger.info(f"DEBUG: attendance table columns are: {cols}")
 
-    async def add_user(self, telegram_id: int, first_name: str, last_name: str, age: int, phone_number: str, group_id: Optional[int] = None, level: str = None, days: str = None) -> None:
+    async def add_user(self, telegram_id: int, first_name: str, last_name: str, age: int, phone_number: str, group_id: Optional[int] = None, level: str = None, days: str = None, username: str = None) -> None:
         query = """
-            INSERT INTO users (telegram_id, first_name, last_name, age, phone_number, group_id, level, days)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO users (telegram_id, first_name, last_name, age, phone_number, group_id, level, days, username)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (telegram_id) DO UPDATE SET 
             first_name = EXCLUDED.first_name,
             last_name = EXCLUDED.last_name,
@@ -56,10 +56,11 @@ class Database:
             phone_number = EXCLUDED.phone_number,
             group_id = EXCLUDED.group_id,
             level = EXCLUDED.level,
-            days = EXCLUDED.days;
+            days = EXCLUDED.days,
+            username = EXCLUDED.username;
         """
         async with self.pool.acquire() as connection:
-            await connection.execute(query, telegram_id, first_name, last_name, age, phone_number, group_id, level, days)
+            await connection.execute(query, telegram_id, first_name, last_name, age, phone_number, group_id, level, days, username)
 
     async def get_user(self, telegram_id: int) -> Optional[asyncpg.Record]:
         query = "SELECT * FROM users WHERE telegram_id = $1"
