@@ -204,15 +204,18 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
     
     # Notify admins asynchronously
     profile_url = f"tg://user?id={user_id}"
-    admin_text = f"🆕 **Yangi O'quvchi**\n\n" \
-                 f"👤 **O'quvchi:** {data['first_name']} {data['last_name']}\n" \
-                 f"**Username:** @{callback.from_user.username if callback.from_user.username else 'Yo\\'q'}\n" \
-                 f"📅 **Yosh:** {data['age']}\n" \
-                 f"📞 **Raqam:** {data['phone_number']}\n" \
-                 f"🆔 **ID:** `{user_id}`\n" \
-                 f"**Profil:** [{data['first_name']}]({profile_url})\n" \
-                 f"📚 **Guruh (Kurs):** {data['level']}\n" \
-                 f"⚠️ **O'quvchi darajasi:** Hali belgilanmagan\n"
+    reg_username = "@" + callback.from_user.username if callback.from_user.username else "Yo'q"
+    admin_text = (
+        f"🆕 **Yangi O'quvchi**\n\n"
+        f"👤 **O'quvchi:** {data['first_name']} {data['last_name']}\n"
+        f"**Username:** {reg_username}\n"
+        f"📅 **Yosh:** {data['age']}\n"
+        f"📞 **Raqam:** {data['phone_number']}\n"
+        f"🆔 **ID:** `{user_id}`\n"
+        f"**Profil:** [{data['first_name']}]({profile_url})\n"
+        f"📚 **Guruh (Kurs):** {data['level']}\n"
+        f"⚠️ **O'quvchi darajasi:** Hali belgilanmagan\n"
+    )
     
     import asyncio
     from utils import notify_admins_async
