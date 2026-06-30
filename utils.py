@@ -38,8 +38,9 @@ async def broadcast_message_async(bot, users: list, text: str, parse_mode: str =
 
 def get_student_profile_text(student: dict, page_info: str = "") -> str:
     days = student.get('days') or "Noma'lum"
+    time = student.get('time') or "Noma'lum"
     bio = student.get('teacher_bio')
-    bio_text = f"\n**📝 Ustoz fikri:** {bio}" if bio else ""
+    bio_text = f"\n\n📝 **Ustoz fikri:** {bio}" if bio else ""
     
     level_val = student.get('level', "Noma'lum")
     student_level_val = student.get('student_level', 'Belgilanmagan')
@@ -48,16 +49,20 @@ def get_student_profile_text(student: dict, page_info: str = "") -> str:
     username_text = f"**Username:** @{username}\n" if username else "**Username:** Yo'q\n"
     profile_link = f"**Profil:** [{student['first_name']}](tg://user?id={student['telegram_id']})\n"
     
-    text = f"👤 **O'quvchi ma'lumotlari{page_info}:**\n\n" \
-           f"**Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
-           f"{username_text}" \
-           f"**Yosh:** {student['age']}\n" \
-           f"**Tel:** {student['phone_number']}\n" \
-           f"**Guruh/Daraja:** {level_val}\n" \
-           f"**Kunlar:** {days}\n" \
-           f"**ID:** {student['telegram_id']}\n" \
-           f"{profile_link}" \
-           f"**O'quvchi maqomi:** {student_level_val}" \
+    text = f"👤 **O'quvchi ma'lumotlari{page_info}:**\n" \
+           f"━━━━━━━━━━━━━━━━━━━\n" \
+           f"📛 **Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
+           f"🔗 {username_text}" \
+           f"🎂 **Yosh:** {student['age']}\n" \
+           f"📞 **Tel:** {student['phone_number']}\n" \
+           f"━━━━━━━━━━━━━━━━━━━\n" \
+           f"🏫 **Guruh/Daraja:** {level_val}\n" \
+           f"🗓 **Kunlar:** {days}\n" \
+           f"⏰ **Vaqti:** {time}\n" \
+           f"━━━━━━━━━━━━━━━━━━━\n" \
+           f"🆔 **ID:** {student['telegram_id']}\n" \
+           f"👤 {profile_link}" \
+           f"🎓 **O'quvchi maqomi:** {student_level_val}" \
            f"{bio_text}"
     return text
 

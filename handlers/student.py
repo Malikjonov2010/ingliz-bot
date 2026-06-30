@@ -157,12 +157,15 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
     # Notify admins asynchronously
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     profile_url = f"tg://user?id={user_id}"
-    admin_text = f"🔴 **Kelmagan O'quvchi**\n\n" \
-                 f"👤 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n" \
+    admin_text = f"🔴 **Kelmagan O'quvchi**\n" \
+                 f"━━━━━━━━━━━━━━━━━━━\n" \
+                 f"📛 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n" \
                  f"📞 **Raqam:** {user['phone_number']}\n" \
-                 f"🆔 **ID:** `{user_id}`\n" \
-                 f"📚 **Guruh (Kurs):** {user['level'] or 'Belgilanmagan'}\n" \
+                 f"━━━━━━━━━━━━━━━━━━━\n" \
+                 f"🏫 **Guruh:** {user['level'] or 'Belgilanmagan'}\n" \
                  f"📅 **Vaqt:** {current_time}\n" \
+                 f"━━━━━━━━━━━━━━━━━━━\n" \
+                 f"🆔 **ID:** `{user_id}`\n" \
                  f"❌ **Holat:** Kelmagan\n" \
                  f"📝 **Sababi:** {reason}"
                  

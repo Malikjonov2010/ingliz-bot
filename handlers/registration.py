@@ -154,12 +154,16 @@ async def process_level(callback: CallbackQuery, state: FSMContext, db: Database
     
     data = await state.get_data()
     
-    confirm_text = f"📋 **Sizning ma'lumotlaringiz:**\n\n" \
-                   f"👤 **Ism-familiya:** {data['first_name']} {data['last_name']}\n" \
-                   f"📅 **Yosh:** {data['age']}\n" \
+    confirm_text = f"📋 **Sizning ma'lumotlaringiz:**\n" \
+                   f"━━━━━━━━━━━━━━━━━━━\n" \
+                   f"📛 **Ism-familiya:** {data['first_name']} {data['last_name']}\n" \
+                   f"🎂 **Yosh:** {data['age']}\n" \
                    f"📞 **Raqam:** {data['phone_number']}\n" \
+                   f"━━━━━━━━━━━━━━━━━━━\n" \
                    f"🏫 **Guruh:** {group['name']}\n" \
-                   f"🗓 **Dars vaqti:** {group['days']} | {group['time']}\n\n" \
+                   f"🗓 **Kunlar:** {group['days']}\n" \
+                   f"⏰ **Vaqti:** {group['time']}\n" \
+                   f"━━━━━━━━━━━━━━━━━━━\n\n" \
                    f"Hamma ma'lumotlar to'g'rimi?"
                    
     kb = InlineKeyboardMarkup(
@@ -225,15 +229,20 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
     profile_url = f"tg://user?id={user_id}"
     reg_username = "@" + callback.from_user.username if callback.from_user.username else "Yo'q"
     admin_text = (
-        f"🆕 **Yangi O'quvchi**\n\n"
-        f"👤 **O'quvchi:** {data['first_name']} {data['last_name']}\n"
-        f"**Username:** {reg_username}\n"
-        f"📅 **Yosh:** {data['age']}\n"
+        f"🆕 **Yangi O'quvchi**\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📛 **O'quvchi:** {data['first_name']} {data['last_name']}\n"
+        f"🔗 **Username:** {reg_username}\n"
+        f"🎂 **Yosh:** {data['age']}\n"
         f"📞 **Raqam:** {data['phone_number']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"🏫 **Guruh:** {data['level']}\n"
+        f"🗓 **Kunlar:** {data.get('days_json', '[]')}\n"
+        f"⏰ **Vaqti:** {group['time'] if 'group' in locals() else 'Noma`lum'}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
         f"🆔 **ID:** `{user_id}`\n"
-        f"**Profil:** [{data['first_name']}]({profile_url})\n"
-        f"📚 **Guruh (Kurs):** {data['level']}\n"
-        f"⚠️ **O'quvchi darajasi:** Hali belgilanmagan\n"
+        f"👤 **Profil:** [{data['first_name']}]({profile_url})\n"
+        f"🎓 **O'quvchi maqomi:** Hali belgilanmagan\n"
     )
     
     import asyncio

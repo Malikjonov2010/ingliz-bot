@@ -16,6 +16,12 @@ class AdminGroupCreation(StatesGroup):
     waiting_for_days  = State()
     waiting_for_time  = State()
 
+class AdminGroupEdit(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_type = State()
+    waiting_for_days = State()
+    waiting_for_time = State()
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 GROUP_LEVELS = [
     "Beginner",
@@ -121,16 +127,166 @@ async def edit_group_menu(callback: CallbackQuery, db: Database):
 
 
 @router.callback_query(F.data.startswith("edit_grp:"))
-async def edit_grp_start(callback: CallbackQuery, state: FSMContext, db: Database):
+async def edit_grp_menu_start(callback: CallbackQuery, state: FSMContext, db: Database):
+    try:
+        await callback.answer()
+    except:
+        pass
     group_id = int(callback.data.split(":")[1])
     group    = await db.get_group(group_id)
-    await state.update_data(edit_group_id=group_id, selected_days=[])
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📛 Nomini (darajasini) tahrirlash", callback_data=f"edit_grp_name:{group_id}")],
+        [InlineKeyboardButton(text="📈 Maqomini tahrirlash", callback_data=f"edit_grp_type:{group_id}")],
+        [InlineKeyboardButton(text="🗓 Kunlarini tahrirlash", callback_data=f"edit_grp_days:{group_id}")],
+        [InlineKeyboardButton(text="⏰ Vaqtini tahrirlash", callback_data=f"edit_grp_time:{group_id}")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="edit_group_menu")]
+    ])
+    lvl = GROUP_LEVEL_LABELS.get(group['group_level'], group['group_level'] or "Belgilanmagan")
+    text = (f"✏️ <b>{group['name']}</b> guruhini tahrirlash:\n\n"
+            f"📈 Maqomi: {lvl}\n"
+            f"🗓 Kunlari: {group['days']}\n"
+            f"⏰ Vaqti: {group['time']}\n\n"
+            f"Nimani o'zgartirmoqchisiz?")
+    
+    # Try to edit the message. If we come from a message (like edit_group_time_entry), we can't always edit.
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+@router.callback_query(F.data.startswith("edit_grp_name:"))
+async def edit_grp_name(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    group_id = int(callback.data.split(":")[1])
+    await state.update_data(edit_group_id=group_id)
     await callback.message.edit_text(
-        f"✏️ <b>{group['name']}</b> guruhining yangi nomini tanlang:",
+        "📛 <b>Guruhning yangi nomini (darajasini) tanlang:</b>",
         parse_mode="HTML",
         reply_markup=_level_keyboard()
     )
-    await state.set_state(AdminGroupCreation.waiting_for_name)
+    await state.set_state(AdminGroupEdit.waiting_for_name)
+
+@router.callback_query(AdminGroupEdit.waiting_for_name, F.data.startswith("pick_grp_lvl:"))
+async def edit_pick_grp_lvl(callback: CallbackQuery, state: FSMContext, db: Database):
+    lvl = callback.data.split(":")[1]
+    data = await state.get_data()
+    edit_id = data["edit_group_id"]
+    group = await db.get_group(edit_id)
+    old_name = group["name"]
+    async with db.pool.acquire() as conn:
+        await conn.execute("UPDATE users SET level = $1 WHERE level = $2", lvl, old_name)
+    await db.update_group(edit_id, lvl, group['days'], group['time'], group['group_level'])
+    await callback.answer(f"✅ Guruh nomi {lvl} etib o'zgartirildi!", show_alert=True)
+    await state.clear()
+    callback.data = f"edit_grp:{edit_id}"
+    await edit_grp_menu_start(callback, state, db)
+
+@router.callback_query(F.data.startswith("edit_grp_type:"))
+async def edit_grp_type_menu(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    group_id = int(callback.data.split(":")[1])
+    await state.update_data(edit_group_id=group_id)
+    await callback.message.edit_text(
+        "📈 <b>Guruh maqomini tanlang:</b>",
+        parse_mode="HTML",
+        reply_markup=_group_type_keyboard()
+    )
+    await state.set_state(AdminGroupEdit.waiting_for_type)
+
+@router.callback_query(AdminGroupEdit.waiting_for_type, F.data.startswith("pick_grp_type:"))
+async def edit_pick_grp_type(callback: CallbackQuery, state: FSMContext, db: Database):
+    grp_type = callback.data.split(":")[1]
+    data = await state.get_data()
+    edit_id = data["edit_group_id"]
+    group = await db.get_group(edit_id)
+    await db.update_group(edit_id, group['name'], group['days'], group['time'], grp_type)
+    await callback.answer(f"✅ Guruh maqomi o'zgartirildi!", show_alert=True)
+    await state.clear()
+    callback.data = f"edit_grp:{edit_id}"
+    await edit_grp_menu_start(callback, state, db)
+
+@router.callback_query(F.data.startswith("edit_grp_days:"))
+async def edit_grp_days(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    group_id = int(callback.data.split(":")[1])
+    await state.update_data(edit_group_id=group_id, selected_days=[])
+    await callback.message.edit_text(
+        "📅 <b>Yangi dars kunlarini tanlang:</b>",
+        parse_mode="HTML",
+        reply_markup=_days_keyboard([])
+    )
+    await state.set_state(AdminGroupEdit.waiting_for_days)
+
+@router.callback_query(AdminGroupEdit.waiting_for_days, F.data.startswith("toggle_day:"))
+async def edit_toggle_day(callback: CallbackQuery, state: FSMContext):
+    day  = callback.data.split(":")[1]
+    data = await state.get_data()
+    selected: list = data.get("selected_days", [])
+    if day in selected: selected.remove(day)
+    else: selected.append(day)
+    await state.update_data(selected_days=selected)
+    await callback.message.edit_reply_markup(reply_markup=_days_keyboard(selected))
+
+@router.callback_query(AdminGroupEdit.waiting_for_days, F.data == "days_done")
+async def edit_days_done(callback: CallbackQuery, state: FSMContext, db: Database):
+    data = await state.get_data()
+    selected = data.get("selected_days", [])
+    if not selected:
+        await callback.answer("Kamida bitta kun tanlang!", show_alert=True)
+        return
+    days_str = " ".join(selected).lower()
+    edit_id = data["edit_group_id"]
+    group = await db.get_group(edit_id)
+    await db.update_group(edit_id, group['name'], days_str, group['time'], group['group_level'])
+    await callback.answer(f"✅ Kunlar o'zgartirildi!", show_alert=True)
+    await state.clear()
+    callback.data = f"edit_grp:{edit_id}"
+    await edit_grp_menu_start(callback, state, db)
+
+@router.callback_query(F.data.startswith("edit_grp_time:"))
+async def edit_grp_time(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    group_id = int(callback.data.split(":")[1])
+    await state.update_data(edit_group_id=group_id)
+    await callback.message.edit_text(
+        "⏰ <b>Yangi dars vaqtini kiriting</b> (masalan: <code>14:00</code>):\n\n"
+        "Format: SS:MM — 24 soatlik ko'rinishda.\n",
+        parse_mode="HTML"
+    )
+    await state.set_state(AdminGroupEdit.waiting_for_time)
+
+@router.message(AdminGroupEdit.waiting_for_time)
+async def edit_group_time_entry(message: Message, state: FSMContext, db: Database):
+    time_text = message.text.strip()
+    if not re.fullmatch(r"([01]?\d|2[0-3]):[0-5]\d", time_text):
+        await message.answer("❌ Noto'g'ri format! Vaqtni SS:MM ko'rinishida kiriting. (masalan: 09:00 yoki 8:30)")
+        return
+    hours, minutes = map(int, time_text.split(":"))
+    if hours < 8 or hours > 18 or (hours == 18 and minutes > 0):
+        await message.answer("⚠️ Vaqt 08:00 dan 18:00 gacha bo'lishi kerak. Iltimos qaytadan kiriting:")
+        return
+    
+    time_text = f"{hours:02d}:{minutes:02d}"
+    data = await state.get_data()
+    edit_id = data["edit_group_id"]
+    group = await db.get_group(edit_id)
+    await db.update_group(edit_id, group['name'], group['days'], time_text, group['group_level'])
+    
+    await message.answer(f"✅ Vaqt {time_text} etib o'zgartirildi!")
+    await state.clear()
+    
+    # Mock a callback to reload the menu
+    class FakeMessage:
+        async def answer(self, *args, **kwargs):
+            return await message.answer(*args, **kwargs)
+        async def edit_text(self, *args, **kwargs):
+            return await message.answer(*args, **kwargs)
+    class FakeCallback:
+        data = f"edit_grp:{edit_id}"
+        message = FakeMessage()
+        async def answer(self, *args, **kwargs):
+            pass
+    await edit_grp_menu_start(FakeCallback(), state, db)
 
 
 # ── Add new group ─────────────────────────────────────────────────────────────
@@ -212,12 +368,12 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
     time_text = message.text.strip()
 
     # Validate HH:MM format, 24-hour
-    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", time_text):
+    if not re.fullmatch(r"([01]?\d|2[0-3]):[0-5]\d", time_text):
         await message.answer(
             "❌ <b>Noto'g'ri format!</b>\n\n"
             "Vaqtni <b>SS:MM</b> ko'rinishida kiriting.\n"
-            "Misol: <code>09:00</code> yoki <code>18:00</code>\n\n"
-            "⚠️ 24 soatlik tizimda, 2 raqam ikki nuqta 2 raqam bo'lishi shart.",
+            "Misol: <code>09:00</code> yoki <code>8:30</code>\n\n"
+            "⚠️ 24 soatlik tizimda, soat va daqiqa orasi ikki nuqta bo'lishi shart.",
             parse_mode="HTML"
         )
         return
@@ -233,6 +389,7 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
         )
         return
 
+    time_text = f"{hours:02d}:{minutes:02d}"
     data    = await state.get_data()
     name    = data["group_name"]
     grp_lvl = data.get("group_level")
@@ -240,17 +397,10 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
     edit_id = data.get("edit_group_id")
 
     try:
+        # Creation flow does not have edit_id anymore since edit is handled separately.
+        # Keeping if edit_id just in case, but it's basically create flow.
         if edit_id:
-            group    = await db.get_group(edit_id)
-            old_name = group["name"]
-            async with db.pool.acquire() as conn:
-                await conn.execute("UPDATE users SET level = $1 WHERE level = $2", name, old_name)
-            await db.update_group(edit_id, name, days, time_text, grp_lvl)
-            await message.answer(
-                f"✅ <b>Guruh muvaffaqiyatli yangilandi!</b>\n\n"
-                f"📛 Nomi: {name}\n📈 Darajasi: {grp_lvl}\n🗓 Kunlari: {days}\n⏰ Vaqti: {time_text}",
-                parse_mode="HTML"
-            )
+            pass # We removed edit from here
         else:
             await db.create_group(name, days, time_text, message.from_user.id, grp_lvl)
             await message.answer(
