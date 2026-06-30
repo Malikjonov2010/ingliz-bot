@@ -578,7 +578,7 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     
     from utils import notify_admins_async, get_student_profile_text, get_student_profile_keyboard
     
-    profile_text = get_student_profile_text(user, page_info=" (Yangi xabar)")
+    profile_text = await get_student_profile_text(user, db=db, page_info=" (Yangi xabar)")
     admin_text = f"{profile_text}\n\n💬 **O'quvchi xabari:**\n{text}"
     kb = get_student_profile_keyboard(user['telegram_id'], back_callback_data="astud_list")
                  

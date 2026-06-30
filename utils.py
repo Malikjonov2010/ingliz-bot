@@ -36,9 +36,22 @@ async def broadcast_message_async(bot, users: list, text: str, parse_mode: str =
     
     return count
 
-def get_student_profile_text(student: dict, page_info: str = "") -> str:
-    days = student.get('days') or "Noma'lum"
-    time = student.get('time') or "Noma'lum"
+async def get_student_profile_text(student: dict, db=None, page_info: str = "") -> str:
+    group = None
+    if db:
+        if student.get('group_id'):
+            group = await db.get_group(student['group_id'])
+        if not group and student.get('level'):
+            async with db.pool.acquire() as connection:
+                group = await connection.fetchrow("SELECT time, days FROM groups WHERE name = $1", student['level'])
+
+    if group:
+        days = group.get('days') or "Noma'lum"
+        time = group.get('time') or "Noma'lum"
+    else:
+        days = student.get('days') or "Noma'lum"
+        time = student.get('time') or "Noma'lum"
+        
     bio = student.get('teacher_bio')
     bio_text = f"\n\n📝 **Ustoz fikri:** {bio}" if bio else ""
     
@@ -85,6 +98,6 @@ async def get_student_profile_text_and_keyboard(db, student_id, back_callback_da
     student = await db.get_user(student_id)
     if not student:
         return None, None
-    text = get_student_profile_text(student)
+    text = await get_student_profile_text(student, db=db)
     kb = get_student_profile_keyboard(student_id, back_callback_data)
     return text, kb

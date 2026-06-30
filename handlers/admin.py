@@ -223,7 +223,7 @@ async def view_students_in_level(callback: CallbackQuery, db: Database):
     student = students[page]
     
     from utils import get_student_profile_text, get_student_profile_keyboard
-    text = get_student_profile_text(student, page_info=f" {page + 1}/{total}")
+    text = await get_student_profile_text(student, db=db, page_info=f" {page + 1}/{total}")
            
     nav_row = []
     if page > 0:
@@ -353,7 +353,7 @@ async def process_astud_prof(callback: CallbackQuery, db: Database):
         return
         
     from utils import get_student_profile_text, get_student_profile_keyboard
-    text = get_student_profile_text(student)
+    text = await get_student_profile_text(student, db=db)
     level = student.get('level')
     back_cb = f"admin_lvl:{level}" if level else "admin_levels_menu"
     kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
@@ -578,7 +578,7 @@ async def process_astud_save_eng_lvl(callback: CallbackQuery, db: Database):
     from utils import get_student_profile_text, get_student_profile_keyboard
     student = await db.get_user(student_id)
     if student:
-        text = get_student_profile_text(student)
+        text = await get_student_profile_text(student, db=db)
         level = student.get('level')
         back_cb = f"admin_lvl:{level}" if level else "admin_levels_menu"
         kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
