@@ -363,7 +363,7 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
             await message.answer(
                 "🚫 Kechirasiz, siz bugun ustozga 3 marta xabar yuborib bo'ldingiz.\n"
                 "Ertaga yana urinib ko'ring!\n\n"
-                "💡 <b>Premium</b> obuna bilan kuniga 10 ta xabar va kanalsiz yuborish mumkin!",
+                "💡 <b>Premium</b> obuna bilan kuniga 10 ta xabar va kanalga obunasiz yuborish mumkin!",
                 parse_mode="HTML"
             )
             return

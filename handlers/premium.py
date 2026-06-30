@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 PURE_ADMIN_ID = 7053301759
 PREMIUM_PRICE = "20,000"
-PREMIUM_OLD_PRICE = "35,000"
+PREMIUM_OLD_PRICE = "40,000"
 PREMIUM_DAYS = 30
 CARD_NUMBER = None  # Hali faol emas — karta kiritilmagan
 
@@ -847,10 +847,9 @@ async def show_monthly_fee(message: Message, db: Database):
         buttons = []
         for g in groups:
             fee = g.get("monthly_fee") or "Kiritilmagan"
-            deadline = g.get("fee_deadline") or "—"
             comment = g.get("fee_comment") or ""
-            text += f"🏫 <b>{g['name']}</b>  →  {fee}  |  📅 {deadline}\n"
-            if comment and comment != "-":
+            text += f"🏫 <b>{g['name']}</b>  →  {fee}\n"
+            if comment and comment != "-" and comment != "–":
                 text += f"   💬 {comment}\n"
             text += "\n"
             buttons.append([InlineKeyboardButton(text=f"✏️ {g['name']}", callback_data=f"fee_edit:{g['id']}")])
@@ -870,14 +869,12 @@ async def show_monthly_fee(message: Message, db: Database):
         group = await db.get_group(group_id)
         if group:
             fee = group.get("monthly_fee") or "Belgilanmagan"
-            deadline = group.get("fee_deadline") or "—"
             comment = group.get("fee_comment") or ""
             text += (
                 f"🏫 <b>Sizning guruhingiz:</b> {group['name']}\n"
                 f"💵 <b>Oylik to'lov:</b> {fee}\n"
-                f"📅 <b>To'lov muddati:</b> {deadline}\n"
             )
-            if comment and comment != "-":
+            if comment and comment != "-" and comment != "–":
                 text += f"💬 <b>Izoh:</b> {comment}\n"
         else:
             text += "⚠️ Guruh ma'lumoti topilmadi.\n"
@@ -924,8 +921,10 @@ async def admin_fee_list(callback: CallbackQuery, db: Database):
     buttons = []
     for g in groups:
         fee = g.get("monthly_fee") or "Kiritilmagan"
-        deadline = g.get("fee_deadline") or "—"
-        text += f"🏫 <b>{g['name']}</b> — {fee} | {deadline}\n"
+        comment = g.get("fee_comment") or ""
+        text += f"🏫 <b>{g['name']}</b> — {fee}\n"
+        if comment and comment != "-" and comment != "–":
+            text += f"   💬 {comment}\n"
         buttons.append([InlineKeyboardButton(text=f"✏️ {g['name']}", callback_data=f"fee_edit:{g['id']}")])
     await callback.message.answer(text, parse_mode="HTML",
                                   reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
@@ -961,21 +960,6 @@ async def admin_fee_amount(message: Message, state: FSMContext):
         return
     await state.update_data(fee=message.text.strip())
     await message.answer(
-        "📅 <b>To'lov muddatini kiriting:</b>\n\n<i>Masalan: Har oyning 10-kuniga qadar</i>",
-        parse_mode="HTML"
-    )
-    await state.set_state(AdminMonthlyFee.waiting_for_deadline)
-
-
-@router.message(AdminMonthlyFee.waiting_for_deadline)
-async def admin_fee_deadline(message: Message, state: FSMContext):
-    if message.text == "⬅️ Bekor qilish":
-        await state.clear()
-        from handlers.student import get_user_keyboard
-        await message.answer("❌ Bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
-        return
-    await state.update_data(deadline=message.text.strip())
-    await message.answer(
         "💬 <b>Qo'shimcha izoh yozing</b> (ixtiyoriy):\n\n"
         "<i>Masalan: Payme yoki Uzum orqali</i>\n\n"
         "Izohsiz o'tkazish uchun <b>–</b> yuboring.",
@@ -994,15 +978,15 @@ async def admin_fee_comment(message: Message, state: FSMContext, db: Database):
     data = await state.get_data()
     group_id = int(data["group_id"])
     fee = data["fee"]
-    deadline = data["deadline"]
+    deadline = ""
     comment = message.text.strip() if message.text else "–"
     await db.set_group_monthly_fee(group_id, fee, deadline, comment)
     group = await db.get_group(group_id)
     await state.clear()
     from handlers.student import get_user_keyboard
     await message.answer(
-        f"✅ <b>{group['name']}</b> — to'lov ma'lumotlari saqlandi!\n\n"
-        f"💵 Summa: {fee}\n📅 Muddat: {deadline}\n💬 Izoh: {comment}",
+        f"✅ <b>Muvaffaqiyatli oylik tolov kiritildi!</b>\n\n"
+        f"🏫 Guruh: {group['name']}\n💵 Summa: {fee}\n💬 Izoh: {comment}",
         parse_mode="HTML",
         reply_markup=get_user_keyboard(message.from_user.id)
     )

@@ -132,8 +132,12 @@ async def process_phone(message: Message, state: FSMContext, db: Database):
         return
         
     kb = []
+    from handlers.admin_groups import GROUP_LEVEL_LABELS
     for g in groups:
-        kb.append([InlineKeyboardButton(text=f"🏫 {g['name']} ({g['days']} | {g['time']})", callback_data=f"level:{g['id']}")])
+        lvl_raw = g['group_level']
+        lvl = GROUP_LEVEL_LABELS.get(lvl_raw, lvl_raw) if lvl_raw else ""
+        lvl_text = f" | {lvl}" if lvl else ""
+        kb.append([InlineKeyboardButton(text=f"🏫 {g['name']}{lvl_text} ({g['days']} | {g['time']})", callback_data=f"level:{g['id']}")])
         
     await message.answer("📚 Qaysi guruhda o'qiysiz?\nIltimos, guruhingizni tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
     await state.set_state(Registration.waiting_for_level)

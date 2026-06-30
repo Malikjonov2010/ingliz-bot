@@ -12,17 +12,20 @@ router = Router()
 # ── States ──────────────────────────────────────────────────────────────────
 class AdminGroupCreation(StatesGroup):
     waiting_for_name  = State()
+    waiting_for_type  = State()
     waiting_for_days  = State()
     waiting_for_time  = State()
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 GROUP_LEVELS = [
+    "Beginner",
     "Elementary",
     "Pre-Intermediate",
     "Intermediate",
     "Upper-Intermediate",
     "Advanced",
-    "Proficiency",
+    "CEFR",
+    "IELTS",
 ]
 
 DAYS_UZ = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"]
@@ -45,6 +48,14 @@ def _days_keyboard(selected: list, group_id=None):
     rows.append([InlineKeyboardButton(text="➡️ Davom etish", callback_data="days_done")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
+
+def _group_type_keyboard():
+    rows = [
+        [InlineKeyboardButton(text="🧠 SMART GROUP", callback_data="pick_grp_type:SMART GROUP")],
+        [InlineKeyboardButton(text="📚 MIDDLE CLASS", callback_data="pick_grp_type:MIDDLE CLASS")],
+        [InlineKeyboardButton(text="😴 LAZY TEAM", callback_data="pick_grp_type:LAZY TEAM")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def _level_keyboard():
     rows = [[InlineKeyboardButton(text=lvl, callback_data=f"pick_grp_lvl:{lvl}")] for lvl in GROUP_LEVELS]
@@ -115,7 +126,7 @@ async def edit_grp_start(callback: CallbackQuery, state: FSMContext, db: Databas
     group    = await db.get_group(group_id)
     await state.update_data(edit_group_id=group_id, selected_days=[])
     await callback.message.edit_text(
-        f"✏️ <b>{group['name']}</b> guruhining yangi darajasini tanlang:",
+        f"✏️ <b>{group['name']}</b> guruhining yangi nomini tanlang:",
         parse_mode="HTML",
         reply_markup=_level_keyboard()
     )
@@ -127,7 +138,7 @@ async def edit_grp_start(callback: CallbackQuery, state: FSMContext, db: Databas
 async def start_add_group(callback: CallbackQuery, state: FSMContext):
     await state.update_data(edit_group_id=None, selected_days=[])
     await callback.message.edit_text(
-        "🏫 <b>Yangi guruh darajasini tanlang:</b>",
+        "🏫 <b>Yangi guruh nomini tanlang:</b>",
         parse_mode="HTML",
         reply_markup=_level_keyboard()
     )
@@ -138,7 +149,19 @@ async def start_add_group(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(AdminGroupCreation.waiting_for_name, F.data.startswith("pick_grp_lvl:"))
 async def pick_grp_lvl(callback: CallbackQuery, state: FSMContext):
     lvl = callback.data.split(":")[1]
-    await state.update_data(group_name=lvl, selected_days=[])
+    await state.update_data(group_name=lvl)
+    await callback.message.edit_text(
+        "📈 <b>Guruh darajasini tanlang:</b>",
+        parse_mode="HTML",
+        reply_markup=_group_type_keyboard()
+    )
+    await state.set_state(AdminGroupCreation.waiting_for_type)
+
+
+@router.callback_query(AdminGroupCreation.waiting_for_type, F.data.startswith("pick_grp_type:"))
+async def pick_grp_type(callback: CallbackQuery, state: FSMContext):
+    grp_type = callback.data.split(":")[1]
+    await state.update_data(group_level=grp_type, selected_days=[])
     await callback.message.edit_text(
         "📅 <b>Dars kunlarini tanlang</b> (bir nechta tanlanadi):",
         parse_mode="HTML",
@@ -212,6 +235,7 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
 
     data    = await state.get_data()
     name    = data["group_name"]
+    grp_lvl = data.get("group_level")
     days    = data["group_days"]
     edit_id = data.get("edit_group_id")
 
@@ -221,17 +245,17 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
             old_name = group["name"]
             async with db.pool.acquire() as conn:
                 await conn.execute("UPDATE users SET level = $1 WHERE level = $2", name, old_name)
-            await db.update_group(edit_id, name, days, time_text)
+            await db.update_group(edit_id, name, days, time_text, grp_lvl)
             await message.answer(
                 f"✅ <b>Guruh muvaffaqiyatli yangilandi!</b>\n\n"
-                f"📛 Nomi: {name}\n🗓 Kunlari: {days}\n⏰ Vaqti: {time_text}",
+                f"📛 Nomi: {name}\n📈 Darajasi: {grp_lvl}\n🗓 Kunlari: {days}\n⏰ Vaqti: {time_text}",
                 parse_mode="HTML"
             )
         else:
-            await db.create_group(name, days, time_text, message.from_user.id)
+            await db.create_group(name, days, time_text, message.from_user.id, grp_lvl)
             await message.answer(
                 f"✅ <b>Yangi guruh qo'shildi!</b>\n\n"
-                f"📛 Nomi: {name}\n🗓 Kunlari: {days}\n⏰ Vaqti: {time_text}",
+                f"📛 Nomi: {name}\n📈 Darajasi: {grp_lvl}\n🗓 Kunlari: {days}\n⏰ Vaqti: {time_text}",
                 parse_mode="HTML"
             )
     except Exception as e:

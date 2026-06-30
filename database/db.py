@@ -73,7 +73,7 @@ class Database:
             await connection.execute(query, telegram_id, status)
             
     async def get_all_groups(self) -> List[asyncpg.Record]:
-        query = "SELECT id, name, days, time, group_level, teacher_id FROM groups ORDER BY id ASC"
+        query = "SELECT id, name, days, time, group_level, teacher_id, monthly_fee, fee_deadline, fee_comment FROM groups ORDER BY id ASC"
         async with self.pool.acquire() as connection:
             return await connection.fetch(query)
             
@@ -87,15 +87,15 @@ class Database:
         async with self.pool.acquire() as connection:
             return await connection.fetchrow(query, group_id)
 
-    async def create_group(self, name: str, days: str, time: str, teacher_id: int = None) -> int:
-        query = "INSERT INTO groups (name, days, time, teacher_id) VALUES ($1, $2, $3, $4) RETURNING id"
+    async def create_group(self, name: str, days: str, time: str, teacher_id: int = None, group_level: str = None) -> int:
+        query = "INSERT INTO groups (name, days, time, teacher_id, group_level) VALUES ($1, $2, $3, $4, $5) RETURNING id"
         async with self.pool.acquire() as connection:
-            return await connection.fetchval(query, name, days, time, teacher_id)
+            return await connection.fetchval(query, name, days, time, teacher_id, group_level)
             
-    async def update_group(self, group_id: int, name: str, days: str, time: str) -> None:
-        query = "UPDATE groups SET name = $2, days = $3, time = $4 WHERE id = $1"
+    async def update_group(self, group_id: int, name: str, days: str, time: str, group_level: str = None) -> None:
+        query = "UPDATE groups SET name = $2, days = $3, time = $4, group_level = $5 WHERE id = $1"
         async with self.pool.acquire() as connection:
-            await connection.execute(query, group_id, name, days, time)
+            await connection.execute(query, group_id, name, days, time, group_level)
 
     async def delete_group(self, group_id: int) -> None:
         """Delete a group and unlink all students from it."""
