@@ -255,8 +255,12 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
         f"🆔 **ID:** `{user_id}`\n"
         f"👤 **Profil:** [{data['first_name']}]({profile_url})\n"
         f"🎓 **O'quvchi maqomi:** Hali belgilanmagan\n"
-        f"⏳ **Ro'yxatdan o'tgan vaqti:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
     )
+    
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    current_time = datetime.now(tz_uz).strftime('%Y-%m-%d %H:%M')
+    admin_text += f"⏳ **Ro'yxatdan o'tgan vaqti:** {current_time}\n"
     
     from utils import notify_admins_async
     await notify_admins_async(callback.bot, admin_text, ADMIN_IDS)

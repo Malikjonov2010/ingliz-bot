@@ -94,7 +94,9 @@ async def process_attendance_present(callback: CallbackQuery, db: Database):
         await callback.message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz!")
         return
         
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    current_time = datetime.now(tz_uz).strftime("%Y-%m-%d %H:%M")
     today_str = today_date.strftime("%Y-%m-%d")
     
     await callback.message.edit_text(f"⏳ So'rovingiz ustozga yuborildi.\n📅 Vaqt: {current_time}\nTasdiqlanishini kuting.")
@@ -168,7 +170,9 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
         return
         
     # Notify admins asynchronously
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    current_time = datetime.now(tz_uz).strftime("%Y-%m-%d %H:%M")
     profile_url = f"tg://user?id={user_id}"
     admin_text = f"🔴 **Kelmagan O'quvchi**\n" \
                  f"━━━━━━━━━━━━━━━━━━━\n" \
@@ -601,7 +605,9 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     from utils import notify_admins_async, get_student_profile_text, get_student_profile_keyboard
     
     profile_text = await get_student_profile_text(user, db=db, page_info=" (Yangi xabar)")
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    current_time = datetime.now(tz_uz).strftime('%Y-%m-%d %H:%M')
     admin_text = f"{profile_text}\n\n💬 **O'quvchi xabari:**\n{text}\n\n⏳ **Yuborilgan vaqt:** {current_time}"
     kb = get_student_profile_keyboard(user['telegram_id'], back_callback_data="astud_list")
                  
