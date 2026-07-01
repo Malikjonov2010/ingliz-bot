@@ -103,11 +103,20 @@ async def get_student_profile_text_and_keyboard(db, student_id, back_callback_da
     kb = get_student_profile_keyboard(student_id, back_callback_data)
     return text, kb
 
-def shorten_days(days_str: str) -> str:
+def shorten_days(days_str) -> str:
     if not days_str or days_str == "[]": return ""
     import json
     try:
-        days_list = json.loads(days_str) if isinstance(days_str, str) and days_str.startswith('[') else (days_str if isinstance(days_str, list) else [])
+        if isinstance(days_str, str):
+            if days_str.startswith('['):
+                days_list = json.loads(days_str)
+            else:
+                days_list = [d.strip() for d in days_str.split(',') if d.strip()]
+        elif isinstance(days_str, list):
+            days_list = days_str
+        else:
+            days_list = []
+            
         short_map = {
             "dushanba": "D",
             "seshanba": "S",
