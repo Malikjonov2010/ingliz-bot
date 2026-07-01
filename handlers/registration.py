@@ -7,6 +7,7 @@ from states.register_states import Registration
 from database.db import Database
 from config import ADMIN_IDS
 import json
+from datetime import datetime
 
 router = Router()
 
@@ -131,13 +132,18 @@ async def process_phone(message: Message, state: FSMContext, db: Database):
         await state.clear()
         return
         
+    from utils import sort_groups, shorten_days
+    groups = sort_groups(groups)
+    
     kb = []
     from handlers.admin_groups import GROUP_LEVEL_LABELS
     for g in groups:
         lvl_raw = g['group_level']
         lvl = GROUP_LEVEL_LABELS.get(lvl_raw, lvl_raw) if lvl_raw else ""
         lvl_text = f" | {lvl}" if lvl else ""
-        kb.append([InlineKeyboardButton(text=f"🏫 {g['name']}{lvl_text} ({g['days']} | {g['time']})", callback_data=f"level:{g['id']}")])
+        short_d = shorten_days(g['days'])
+        kb.append([InlineKeyboardButton(text=f"🏫 {g['name']}{lvl_text} ({short_d} | {g['time']})", callback_data=f"level:{g['id']}")])
+
         
     await message.answer("📚 Qaysi guruhda o'qiysiz?\nIltimos, guruhingizni tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
     await state.set_state(Registration.waiting_for_level)
@@ -225,6 +231,12 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
         await callback.message.answer(f"⚠️ Xatolik yuz berdi: {str(e)}\nIltimos, qaytadan urinib ko'ring yoki adminga murojaat qiling.")
         return
     
+    group = await db.get_group(data.get('group_id'))
+    group_time = group['time'] if group else 'Noma`lum'
+    
+    from utils import shorten_days
+    short_d = shorten_days(data.get('days_json', '[]'))
+    
     # Notify admins asynchronously
     profile_url = f"tg://user?id={user_id}"
     reg_username = "@" + callback.from_user.username if callback.from_user.username else "Yo'q"
@@ -236,15 +248,15 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
         f"🎂 **Yosh:** {data['age']}\n"
         f"📞 **Raqam:** {data['phone_number']}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
-        f"🏫 **Guruh:** {data['level']}\n"
-        f"🗓 **Kunlar:** {data.get('days_json', '[]')}\n"
-        f"⏰ **Vaqti:** {group['time'] if 'group' in locals() else 'Noma`lum'}\n"
+        f"🏫 **Guruh:** {data.get('level', '')}\n"
+        f"🗓 **Kunlar:** {short_d}\n"
+        f"⏰ **Guruh vaqti:** {group_time}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"🆔 **ID:** `{user_id}`\n"
         f"👤 **Profil:** [{data['first_name']}]({profile_url})\n"
         f"🎓 **O'quvchi maqomi:** Hali belgilanmagan\n"
+        f"⏳ **Ro'yxatdan o'tgan vaqti:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
     )
     
-    import asyncio
     from utils import notify_admins_async
-    asyncio.create_task(notify_admins_async(callback.bot, admin_text, ADMIN_IDS))
+    await notify_admins_async(callback.bot, admin_text, ADMIN_IDS)

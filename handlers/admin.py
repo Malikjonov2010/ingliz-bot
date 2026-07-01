@@ -610,3 +610,86 @@ async def save_astud_bio(message: Message, state: FSMContext, db: Database):
 async def cancel_astud_edit(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.delete()
+
+from datetime import datetime
+
+@router.callback_query(F.data.startswith("att_appr:"))
+async def approve_attendance(callback: CallbackQuery, db: Database):
+    parts = callback.data.split(":")
+    student_id = int(parts[1])
+    date_str = parts[2]
+    today_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    
+    success, msg = await db.mark_attendance(student_id, today_date, is_present=True)
+    if success:
+        await callback.message.edit_text(callback.message.text + "\n\n✅ Tasdiqlandi.")
+        await callback.bot.send_message(student_id, "✅ Sizning bugun darsga kelganingiz ustoz tomonidan tasdiqlandi.")
+    else:
+        await callback.answer(msg, show_alert=True)
+
+@router.callback_query(F.data.startswith("att_rej:"))
+async def reject_attendance(callback: CallbackQuery, db: Database):
+    parts = callback.data.split(":")
+    student_id = int(parts[1])
+    date_str = parts[2]
+    today_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    
+    success, msg = await db.mark_attendance(student_id, today_date, is_present=False, reason="Ustoz tomonidan rad etildi")
+    if success:
+        await callback.message.edit_text(callback.message.text + "\n\n❌ Rad etildi.")
+        await callback.bot.send_message(student_id, "❌ Ustoz tomonidan bugun kelganingiz rad qilindi va davomatga yo'q qilindingiz.")
+    else:
+        await callback.answer(msg, show_alert=True)
+
+@router.callback_query(F.data.startswith("astud_att_hist:"))
+async def admin_student_attendance_history(callback: CallbackQuery, db: Database):
+    await callback.answer()
+    parts = callback.data.split(":")
+    if len(parts) < 2: return
+    student_id = int(parts[1])
+    
+    async with db.pool.acquire() as connection:
+        records = await connection.fetch("""
+            SELECT date, created_at, is_present, reason 
+            FROM attendance 
+            WHERE user_id = $1 AND date >= current_date - interval '30 days'
+            ORDER BY date DESC
+        """, student_id)
+        
+    student = await db.get_user(student_id)
+    student_name = f"{student.get('first_name', '')} {student.get('last_name', '')}".strip() if student else str(student_id)
+        
+    if not records:
+        await callback.message.answer(f"📅 {student_name} uchun oxirgi 30 kun ichida davomat tarixi topilmadi.")
+        return
+        
+    total_days = len(records)
+    present_count = sum(1 for r in records if r['is_present'])
+    absent_count = total_days - present_count
+    
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    
+    history_lines = []
+    for r in records:
+        created_dt = r['created_at'].astimezone(tz_uz) if r['created_at'] else r['date']
+        date_str = created_dt.strftime("%Y-%m-%d %H:%M")
+        if r['is_present']:
+            history_lines.append(f"✅ {date_str} - Keldi")
+        else:
+            reason_str = r['reason'] or ""
+            if "rad etildi" in reason_str.lower():
+                history_lines.append(f"❌ {date_str} - Kelmadi (Tasdiqlanmadi)")
+            else:
+                history_lines.append(f"❌ {date_str} - Kelmadi ({reason_str})")
+                
+    text = (
+        f"👤 **O'quvchi:** {student_name}\n"
+        f"📅 **Oxirgi 30 kunlik davomat tarixi:**\n\n"
+        f"📊 Umumiy darslar: {total_days}\n"
+        f"✅ Kelgan / ❌ Kelmagan: {present_count}/{absent_count}\n\n"
+        f"**Tarix (Sana va vaqt):**\n" + "\n".join(history_lines)
+    )
+    
+    await callback.message.answer(text, parse_mode="Markdown")
+

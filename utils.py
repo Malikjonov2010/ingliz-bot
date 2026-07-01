@@ -84,6 +84,7 @@ def get_student_profile_keyboard(student_id: int, back_callback_data: str = "ast
     buttons = [
         [InlineKeyboardButton(text="🎓 Ingliz tili darajasi", callback_data=f"astud_eng_lvl:{student_id}")],
         [InlineKeyboardButton(text="📝 Dars o'zlashtirishi", callback_data=f"astud_score_info:{student_id}")],
+        [InlineKeyboardButton(text="📅 Oylik davomat tarixi", callback_data=f"astud_att_hist:{student_id}")],
         [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{student_id}")],
         [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{student_id}")]
     ]
@@ -101,3 +102,41 @@ async def get_student_profile_text_and_keyboard(db, student_id, back_callback_da
     text = await get_student_profile_text(student, db=db)
     kb = get_student_profile_keyboard(student_id, back_callback_data)
     return text, kb
+
+def shorten_days(days_str: str) -> str:
+    if not days_str or days_str == "[]": return ""
+    import json
+    try:
+        days_list = json.loads(days_str) if isinstance(days_str, str) and days_str.startswith('[') else (days_str if isinstance(days_str, list) else [])
+        short_map = {
+            "dushanba": "D",
+            "seshanba": "S",
+            "chorshanba": "CH",
+            "payshanba": "P",
+            "juma": "J",
+            "shanba": "SH",
+            "yakshanba": "Y"
+        }
+        res = [short_map.get(d.strip().lower(), d.strip().upper()[:2]) for d in days_list]
+        return ".".join(res)
+    except Exception:
+        return str(days_str)
+
+def sort_groups(groups):
+    GROUP_LEVELS_ORDER = {
+        "Beginner": 1,
+        "Elementary": 2,
+        "Pre-Intermediate": 3,
+        "Intermediate": 4,
+        "Upper-Intermediate": 5,
+        "Advanced": 6,
+        "CEFR": 7,
+        "IELTS": 8
+    }
+    def get_order(g):
+        name = g['name']
+        for level, order in GROUP_LEVELS_ORDER.items():
+            if level.lower() in name.lower():
+                return order
+        return 99
+    return sorted(groups, key=get_order)

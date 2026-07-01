@@ -62,19 +62,23 @@ async def mark_attendance(message: Message, db: Database):
         
     if record is not None:
         status_str = "Keldi" if record['is_present'] else f"Kelmadi (Sabab: {record['reason']})"
-        await message.answer(f"❌ Siz bugun davomatdan o'tgansiz!\nHolat: **{status_str}**", parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📅 Davomat tarixi", callback_data="attendance_history")]
+        ])
+        await message.answer(f"❌ Siz bugun davomatdan o'tgansiz!\nHolat: **{status_str}**", parse_mode="Markdown", reply_markup=kb)
         return
 
     # Show options
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="📅 Davomat tarixi", callback_data="attendance_history")],
             [
                 InlineKeyboardButton(text="✅ Keldim", callback_data="attendance_present"),
                 InlineKeyboardButton(text="❌ Kelmadim", callback_data="attendance_absent")
             ]
         ]
     )
-    await message.answer("👋 Assalomu alaykum!\nBugungi darsda ishtirok etasizmi? Iltimos, tanlang:", reply_markup=keyboard)
+    await message.answer("🏫 **Bugungi darsda ishtirok etdingizmi?**", parse_mode="Markdown", reply_markup=keyboard)
 
 @router.callback_query(F.data == "attendance_present")
 async def process_attendance_present(callback: CallbackQuery, db: Database):
@@ -90,24 +94,33 @@ async def process_attendance_present(callback: CallbackQuery, db: Database):
         await callback.message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz!")
         return
         
-    success, msg = await db.mark_attendance(user_id, today_date, is_present=True)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    await callback.message.edit_text(f"✅ Bugungi darsga kelganingiz tasdiqlandi.\n📅 Vaqt: {current_time}\nHolat: Kelgan")
+    today_str = today_date.strftime("%Y-%m-%d")
+    
+    await callback.message.edit_text(f"⏳ So'rovingiz ustozga yuborildi.\n📅 Vaqt: {current_time}\nTasdiqlanishini kuting.")
     
     user = await db.get_user(user_id)
     if user:
         profile_url = f"tg://user?id={user_id}"
-        admin_text = f"🟢 **Kelgan O'quvchi**\n\n" \
-                     f"👤 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n" \
-                     f"📞 **Raqam:** {user['phone_number']}\n" \
-                     f"🆔 **ID:** `{user_id}`\n" \
-                     f"📚 **Guruh (Kurs):** {user['level'] or 'Belgilanmagan'}\n" \
-                     f"📅 **Vaqt:** {current_time}\n" \
-                     f"✅ **Holat:** Kelgan"
+        admin_text = (
+            f"🙋‍♂️ **Davomat so'rovi (Keldi)**\n\n"
+            f"👤 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n"
+            f"📞 **Raqam:** {user['phone_number']}\n"
+            f"🆔 **ID:** `{user_id}`\n"
+            f"📚 **Guruh (Kurs):** {user['level'] or 'Belgilanmagan'}\n"
+            f"📅 **Vaqt:** {current_time}\n"
+            f"Siz ushbu o'quvchining kelganini tasdiqlaysizmi?"
+        )
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"att_appr:{user_id}:{today_str}"),
+                InlineKeyboardButton(text="❌ Rad etish", callback_data=f"att_rej:{user_id}:{today_str}")
+            ]
+        ])
                      
-        import asyncio
         from utils import notify_admins_async
-        asyncio.create_task(notify_admins_async(callback.bot, admin_text, ADMIN_IDS))
+        await notify_admins_async(callback.bot, admin_text, ADMIN_IDS, reply_markup=kb)
 
 @router.callback_query(F.data == "attendance_absent")
 async def process_attendance_absent(callback: CallbackQuery, state: FSMContext, db: Database):
@@ -169,9 +182,8 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
                  f"❌ **Holat:** Kelmagan\n" \
                  f"📝 **Sababi:** {reason}"
                  
-    import asyncio
     from utils import notify_admins_async
-    asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS))
+    await notify_admins_async(message.bot, admin_text, ADMIN_IDS)
             
     await message.answer(f"✅ Sababi adminga yuborildi. Rahmat!\n📅 Vaqt: {current_time}\nHolat: Kelmagan", reply_markup=get_user_keyboard(message.from_user.id))
     await state.clear()
@@ -494,7 +506,16 @@ async def process_deletion_reason(message: Message, state: FSMContext, db: Datab
     username = user.get('username')
     username_text = f"@{username}" if username else "Yo'q"
     profile_link = f"[{user['first_name']}](tg://user?id={user['telegram_id']})"
-    admin_text = f"🗑 **Akkauntni o'chirish so'rovi:**\nO'quvchi: {profile_link}\n**Username:** {username_text}\n**Sabab:** {reason}\n**ID:** `{user['telegram_id']}`"
+    
+    admin_text = (
+        f"🗑 **Akkauntni o'chirish so'rovi:**\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **O'quvchi:** {profile_link}\n"
+        f"🔗 **Username:** {username_text}\n"
+        f"📝 **Sabab:** {reason}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"🆔 **ID:** `{user['telegram_id']}`"
+    )
     
     admin_keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="✅ Tasdiqlash va Kod yuborish", callback_data=f"del_req:{user['telegram_id']}")] ]
@@ -502,7 +523,8 @@ async def process_deletion_reason(message: Message, state: FSMContext, db: Datab
     
     import asyncio
     from utils import notify_admins_async
-    asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS, parse_mode=None, reply_markup=admin_keyboard))
+    asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS, parse_mode="Markdown", reply_markup=admin_keyboard))
+
             
     await state.set_state(Deletion.waiting_for_code)
 
@@ -579,7 +601,8 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     from utils import notify_admins_async, get_student_profile_text, get_student_profile_keyboard
     
     profile_text = await get_student_profile_text(user, db=db, page_info=" (Yangi xabar)")
-    admin_text = f"{profile_text}\n\n💬 **O'quvchi xabari:**\n{text}"
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    admin_text = f"{profile_text}\n\n💬 **O'quvchi xabari:**\n{text}\n\n⏳ **Yuborilgan vaqt:** {current_time}"
     kb = get_student_profile_keyboard(user['telegram_id'], back_callback_data="astud_list")
                  
     import asyncio
@@ -638,3 +661,49 @@ async def catch_all_messages(message: Message, state: FSMContext, db: Database):
         await message.answer("⚠️ Kechirasiz, men bu xabarni tushunmadim. Iltimos, menyudagi tugmalardan foydalaning.")
     else:
         await message.answer("⚠️ Noto'g'ri buyruq yoki format. Bekor qilish uchun /start ni bosing.")
+
+@router.callback_query(F.data == "attendance_history")
+async def show_attendance_history(callback: CallbackQuery, db: Database):
+    await callback.answer()
+    user_id = callback.from_user.id
+    
+    async with db.pool.acquire() as connection:
+        records = await connection.fetch("""
+            SELECT date, created_at, is_present, reason 
+            FROM attendance 
+            WHERE user_id = $1 AND date >= current_date - interval '30 days'
+            ORDER BY date DESC
+        """, user_id)
+        
+    if not records:
+        await callback.message.answer("📅 Oxirgi 30 kun ichida davomat tarixingiz topilmadi.")
+        return
+        
+    total_days = len(records)
+    present_count = sum(1 for r in records if r['is_present'])
+    absent_count = total_days - present_count
+    
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    
+    history_lines = []
+    for r in records:
+        created_dt = r['created_at'].astimezone(tz_uz) if r['created_at'] else r['date']
+        date_str = created_dt.strftime("%Y-%m-%d %H:%M")
+        if r['is_present']:
+            history_lines.append(f"✅ {date_str} - Keldi")
+        else:
+            reason_str = r['reason'] or ""
+            if "rad etildi" in reason_str.lower():
+                history_lines.append(f"❌ {date_str} - Kelmadi (Tasdiqlanmadi)")
+            else:
+                history_lines.append(f"❌ {date_str} - Kelmadi ({reason_str})")
+                
+    text = (
+        f"📅 **Oxirgi 30 kunlik davomat tarixi:**\n\n"
+        f"📊 Umumiy darslar: {total_days}\n"
+        f"✅ Kelgan / ❌ Kelmagan: {present_count}/{absent_count}\n\n"
+        f"**Tarix (Sana va vaqt):**\n" + "\n".join(history_lines)
+    )
+    
+    await callback.message.answer(text, parse_mode="Markdown")

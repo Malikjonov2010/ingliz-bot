@@ -93,12 +93,16 @@ async def admin_view_groups(callback: CallbackQuery, db: Database):
         )
         return
 
+    from utils import sort_groups, shorten_days
+    groups = sort_groups(groups)
+
     text = f"📊 <b>Jami guruhlar soni:</b> {len(groups)}\n\n"
     for g in groups:
         lvl_raw = g['group_level'] or "Belgilanmagan"
         lvl     = GROUP_LEVEL_LABELS.get(lvl_raw, lvl_raw)
+        short_d = shorten_days(g['days'])
         text   += (f"🏫 <b>{g['name']}</b>\n"
-                   f"🗓 Kunlari: {g['days']} | ⏰ Vaqti: {g['time']}\n"
+                   f"🗓 Kunlari: {short_d} | ⏰ Vaqti: {g['time']}\n"
                    f"📈 Darajasi: {lvl}\n\n")
 
     kb = []
@@ -120,6 +124,8 @@ async def admin_view_groups(callback: CallbackQuery, db: Database):
 @router.callback_query(F.data == "edit_group_menu")
 async def edit_group_menu(callback: CallbackQuery, db: Database):
     groups = await db.get_all_groups()
+    from utils import sort_groups
+    groups = sort_groups(groups)
     kb = [[InlineKeyboardButton(text=f"✏️ {g['name']}", callback_data=f"edit_grp:{g['id']}")] for g in groups]
     kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_view_groups")])
     await callback.message.edit_text("Tahrirlash uchun guruhni tanlang:",
@@ -604,6 +610,8 @@ async def delete_group_menu(callback: CallbackQuery, db: Database):
     if not groups:
         await callback.answer("Guruhlar yo'q.", show_alert=True)
         return
+    from utils import sort_groups
+    groups = sort_groups(groups)
     kb = [[InlineKeyboardButton(
                text=f"🗑 {g['name']}",
                callback_data=f"del_grp_confirm:{g['id']}"
