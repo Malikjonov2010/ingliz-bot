@@ -141,8 +141,8 @@ async def process_phone(message: Message, state: FSMContext, db: Database):
         lvl_raw = g['group_level']
         lvl = GROUP_LEVEL_LABELS.get(lvl_raw, lvl_raw) if lvl_raw else ""
         lvl_text = f" | {lvl}" if lvl else ""
-        short_d = shorten_days(g['days'])
-        kb.append([InlineKeyboardButton(text=f"🏫 {g['name']}{lvl_text} ({short_d} | {g['time']})", callback_data=f"level:{g['id']}")])
+        short_d = shorten_days(g['days']).replace("Haftada ", "")
+        kb.append([InlineKeyboardButton(text=f"🏫 {g['name']} ⏰{g['time']}{lvl_text} ({short_d})", callback_data=f"level:{g['id']}")])
 
         
     await message.answer("📚 Qaysi guruhda o'qiysiz?\nIltimos, guruhingizni tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))

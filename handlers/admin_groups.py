@@ -109,7 +109,7 @@ async def admin_view_groups(callback: CallbackQuery, db: Database):
     for g in groups:
         kb.append([InlineKeyboardButton(
             text=f"📈 {g['name']} darajasini o'zgartirish",
-            callback_data=f"eval_grp:{g['name']}"
+            callback_data=f"eval_grp:{g['id']}"
         )])
     kb.append([InlineKeyboardButton(text="✏️ Guruhni tahrirlash",  callback_data="edit_group_menu")])
     kb.append([InlineKeyboardButton(text="🗑 Guruhni o'chirish",   callback_data="delete_group_menu")])
