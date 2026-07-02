@@ -245,15 +245,15 @@ async def final_confirm(callback: CallbackQuery, state: FSMContext, db: Database
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"📛 **O'quvchi:** {data['first_name']} {data['last_name']}\n"
         f"🔗 **Username:** {reg_username}\n"
+        f"👤 **Profil:** [{data['first_name']}]({profile_url})\n"
         f"🎂 **Yosh:** {data['age']}\n"
-        f"📞 **Raqam:** {data['phone_number']}\n"
+        f"📞 **Raqam:** +{str(data['phone_number']).lstrip('+')}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"🏫 **Guruh:** {data.get('level', '')}\n"
         f"🗓 **Kunlar:** {short_d}\n"
         f"⏰ **Guruh vaqti:** {group_time}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
         f"🆔 **ID:** `{user_id}`\n"
-        f"👤 **Profil:** [{data['first_name']}]({profile_url})\n"
         f"🎓 **O'quvchi maqomi:** Hali belgilanmagan\n"
     )
     

@@ -66,15 +66,15 @@ async def get_student_profile_text(student: dict, db=None, page_info: str = "") 
            f"━━━━━━━━━━━━━━━━━━━\n" \
            f"📛 **Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
            f"🔗 {username_text}" \
+           f"👤 {profile_link}" \
            f"🎂 **Yosh:** {student['age']}\n" \
-           f"📞 **Tel:** {student['phone_number']}\n" \
+           f"📞 **Tel:** +{str(student['phone_number']).lstrip('+')}\n" \
            f"━━━━━━━━━━━━━━━━━━━\n" \
            f"🏫 **Guruh/Daraja:** {level_val}\n" \
-           f"🗓 **Kunlar:** {days}\n" \
+           f"🗓 **Kunlar:** {shorten_days(days)}\n" \
            f"⏰ **Vaqti:** {time}\n" \
            f"━━━━━━━━━━━━━━━━━━━\n" \
            f"🆔 **ID:** {student['telegram_id']}\n" \
-           f"👤 {profile_link}" \
            f"🎓 **O'quvchi maqomi:** {student_level_val}" \
            f"{bio_text}"
     return text
@@ -111,7 +111,10 @@ def shorten_days(days_str) -> str:
             if days_str.startswith('['):
                 days_list = json.loads(days_str)
             else:
-                days_list = [d.strip() for d in days_str.split(',') if d.strip()]
+                if ',' in days_str:
+                    days_list = [d.strip() for d in days_str.split(',') if d.strip()]
+                else:
+                    days_list = [d.strip() for d in days_str.split(' ') if d.strip()]
         elif isinstance(days_str, list):
             days_list = days_str
         else:
@@ -123,11 +126,14 @@ def shorten_days(days_str) -> str:
             "chorshanba": "CH",
             "payshanba": "P",
             "juma": "J",
-            "shanba": "SH",
+            "shanba": "Sh",
             "yakshanba": "Y"
         }
+        if not days_list:
+            return ""
         res = [short_map.get(d.strip().lower(), d.strip().upper()[:2]) for d in days_list]
-        return ".".join(res)
+        abbreviations = ".".join(res)
+        return f"Haftada {len(days_list)} kun ({abbreviations})"
     except Exception:
         return str(days_str)
 

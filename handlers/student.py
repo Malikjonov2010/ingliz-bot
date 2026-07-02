@@ -103,13 +103,17 @@ async def process_attendance_present(callback: CallbackQuery, db: Database):
     
     user = await db.get_user(user_id)
     if user:
+        from utils import shorten_days
+        short_d = shorten_days(user.get('days'))
+        
         profile_url = f"tg://user?id={user_id}"
         admin_text = (
             f"🙋‍♂️ **Davomat so'rovi (Keldi)**\n\n"
             f"👤 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n"
-            f"📞 **Raqam:** {user['phone_number']}\n"
+            f"📞 **Raqam:** +{str(user['phone_number']).lstrip('+')}\n"
             f"🆔 **ID:** `{user_id}`\n"
             f"📚 **Guruh (Kurs):** {user['level'] or 'Belgilanmagan'}\n"
+            f"🗓 **Kunlar:** {short_d}\n"
             f"📅 **Vaqt:** {current_time}\n"
             f"Siz ushbu o'quvchining kelganini tasdiqlaysizmi?"
         )
@@ -174,12 +178,16 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
     tz_uz = pytz.timezone('Asia/Tashkent')
     current_time = datetime.now(tz_uz).strftime("%Y-%m-%d %H:%M")
     profile_url = f"tg://user?id={user_id}"
+    from utils import shorten_days
+    short_d = shorten_days(user.get('days'))
+    
     admin_text = f"🔴 **Kelmagan O'quvchi**\n" \
                  f"━━━━━━━━━━━━━━━━━━━\n" \
                  f"📛 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n" \
-                 f"📞 **Raqam:** {user['phone_number']}\n" \
+                 f"📞 **Raqam:** +{str(user['phone_number']).lstrip('+')}\n" \
                  f"━━━━━━━━━━━━━━━━━━━\n" \
                  f"🏫 **Guruh:** {user['level'] or 'Belgilanmagan'}\n" \
+                 f"🗓 **Kunlar:** {short_d}\n" \
                  f"📅 **Vaqt:** {current_time}\n" \
                  f"━━━━━━━━━━━━━━━━━━━\n" \
                  f"🆔 **ID:** `{user_id}`\n" \

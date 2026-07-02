@@ -163,9 +163,9 @@ async def admin_groups_and_students(message: Message, db: Database):
         
     inline_kb = []
     for i in range(0, len(groups), 2):
-        row = [InlineKeyboardButton(text=groups[i]['name'], callback_data=f"admin_lvl:{groups[i]['name']}")]
+        row = [InlineKeyboardButton(text=groups[i]['name'], callback_data=f"admin_lvl:{groups[i]['id']}")]
         if i + 1 < len(groups):
-            row.append(InlineKeyboardButton(text=groups[i+1]['name'], callback_data=f"admin_lvl:{groups[i+1]['name']}"))
+            row.append(InlineKeyboardButton(text=groups[i+1]['name'], callback_data=f"admin_lvl:{groups[i+1]['id']}"))
         inline_kb.append(row)
         
     keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
@@ -176,29 +176,41 @@ async def back_to_levels_menu(callback: CallbackQuery, db: Database):
     groups = await db.get_all_groups()
     inline_kb = []
     for i in range(0, len(groups), 2):
-        row = [InlineKeyboardButton(text=groups[i]['name'], callback_data=f"admin_lvl:{groups[i]['name']}")]
+        row = [InlineKeyboardButton(text=groups[i]['name'], callback_data=f"admin_lvl:{groups[i]['id']}")]
         if i + 1 < len(groups):
-            row.append(InlineKeyboardButton(text=groups[i+1]['name'], callback_data=f"admin_lvl:{groups[i+1]['name']}"))
+            row.append(InlineKeyboardButton(text=groups[i+1]['name'], callback_data=f"admin_lvl:{groups[i+1]['id']}"))
         inline_kb.append(row)
     keyboard = InlineKeyboardMarkup(inline_keyboard=inline_kb)
     await callback.message.edit_text("👥 **Guruhlar va O'quvchilar**\nKerakli guruhni tanlang:", parse_mode="Markdown", reply_markup=keyboard)
 
 @router.callback_query(F.data.startswith("admin_lvl:"))
 async def admin_level_menu(callback: CallbackQuery, db: Database):
-    level = callback.data.split(":")[1]
+    group_id_str = callback.data.split(":")[1]
     
-    async with db.pool.acquire() as connection:
-        count = await connection.fetchval("SELECT COUNT(*) FROM users WHERE level = $1 AND status = 'active'", level)
-        
+    if group_id_str.isdigit():
+        group_id = int(group_id_str)
+        group = await db.get_group(group_id)
+        if not group:
+            await callback.answer("Guruh topilmadi", show_alert=True)
+            return
+        level_name = group['name']
+        async with db.pool.acquire() as connection:
+            count = await connection.fetchval("SELECT COUNT(*) FROM users WHERE group_id = $1 AND status = 'active'", group_id)
+    else:
+        group_id = group_id_str
+        level_name = group_id_str
+        async with db.pool.acquire() as connection:
+            count = await connection.fetchval("SELECT COUNT(*) FROM users WHERE level = $1 AND status = 'active'", level_name)
+            
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👥 O'quvchilarni ko'rish", callback_data=f"view_studs:{level}:0")],
-        [InlineKeyboardButton(text="🎓 O'quvchini darajalash", callback_data=f"eval_studs:{level}")],
-        [InlineKeyboardButton(text="🏫 Guruhni baholash", callback_data=f"eval_grp:{level}")],
-        [InlineKeyboardButton(text="📝 Ball qo'yish", callback_data=f"score_list:{level}")],
+        [InlineKeyboardButton(text="👥 O'quvchilarni ko'rish", callback_data=f"view_studs:{group_id}:0")],
+        [InlineKeyboardButton(text="🎓 O'quvchini darajalash", callback_data=f"eval_studs:{group_id}")],
+        [InlineKeyboardButton(text="🏫 Guruhni baholash", callback_data=f"eval_grp:{group_id}")],
+        [InlineKeyboardButton(text="📝 Ball qo'yish", callback_data=f"score_list:{group_id}")],
         [InlineKeyboardButton(text="🔙 Orqaga", callback_data="admin_levels_menu")]
     ])
     
-    await callback.message.edit_text(f"📚 **{level} guruhi**\n👥 O'quvchilar soni: {count}", parse_mode="Markdown", reply_markup=kb)
+    await callback.message.edit_text(f"📚 **{level_name} guruhi**\n👥 O'quvchilar soni: {count}", parse_mode="Markdown", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("view_studs:"))
 async def view_students_in_level(callback: CallbackQuery, db: Database):
@@ -206,8 +218,13 @@ async def view_students_in_level(callback: CallbackQuery, db: Database):
     level = parts[1]
     page = int(parts[2])
     
-    async with db.pool.acquire() as connection:
-        students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
+    if level.isdigit():
+        group_id = int(level)
+        async with db.pool.acquire() as connection:
+            students = await connection.fetch("SELECT * FROM users WHERE group_id = $1 AND status = 'active' ORDER BY created_at ASC", group_id)
+    else:
+        async with db.pool.acquire() as connection:
+            students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
     students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
         
     if not students:
@@ -240,8 +257,13 @@ async def view_students_in_level(callback: CallbackQuery, db: Database):
 async def eval_students_list(callback: CallbackQuery, db: Database):
     level = callback.data.split(":")[1]
     
-    async with db.pool.acquire() as connection:
-        students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
+    if level.isdigit():
+        group_id = int(level)
+        async with db.pool.acquire() as connection:
+            students = await connection.fetch("SELECT * FROM users WHERE group_id = $1 AND status = 'active' ORDER BY created_at ASC", group_id)
+    else:
+        async with db.pool.acquire() as connection:
+            students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active' ORDER BY created_at ASC", level)
     students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
         
     if not students:
@@ -292,18 +314,26 @@ async def save_stud_lvl(callback: CallbackQuery, db: Database):
     await eval_students_list(fake_cb, db)
 
 @router.callback_query(F.data.startswith("eval_grp:"))
-async def eval_grp_opts(callback: CallbackQuery):
+async def eval_grp_opts(callback: CallbackQuery, db: Database):
     level = callback.data.split(":")[1]
     
+    if level.isdigit():
+        group_id = int(level)
+        group = await db.get_group(group_id)
+        group_name = group['name'] if group else str(group_id)
+    else:
+        group_id = level
+        group_name = level
+        
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🧠 SMART GROUP",  callback_data=f"save_g_lvl:{level}:SMART GROUP")],
-        [InlineKeyboardButton(text="📚 MIDDLE CLASS", callback_data=f"save_g_lvl:{level}:MIDDLE CLASS")],
-        [InlineKeyboardButton(text="😴 LAZY TEAM",   callback_data=f"save_g_lvl:{level}:LAZY TEAM")],
-        [InlineKeyboardButton(text="🔙 Orqaga",       callback_data=f"admin_lvl:{level}")]
+        [InlineKeyboardButton(text="🧠 SMART GROUP",  callback_data=f"save_g_lvl:{group_id}:SMART GROUP")],
+        [InlineKeyboardButton(text="📚 MIDDLE CLASS", callback_data=f"save_g_lvl:{group_id}:MIDDLE CLASS")],
+        [InlineKeyboardButton(text="😴 LAZY TEAM",   callback_data=f"save_g_lvl:{group_id}:LAZY TEAM")],
+        [InlineKeyboardButton(text="🔙 Orqaga",       callback_data=f"admin_lvl:{group_id}")]
     ])
     
     await callback.message.edit_text(
-        f"🏫 <b>{level}</b> guruhi uchun nom/daraja tanlang:",
+        f"🏫 <b>{group_name}</b> guruhi uchun nom/daraja tanlang:",
         parse_mode="HTML",
         reply_markup=kb
     )
@@ -314,10 +344,17 @@ async def save_grp_lvl(callback: CallbackQuery, db: Database):
     level = parts[1]
     grp_level = parts[2]
     
-    async with db.pool.acquire() as connection:
-        await connection.execute("""
-            UPDATE groups SET group_level = $2 WHERE name = $1
-        """, level, grp_level)
+    if level.isdigit():
+        group_id = int(level)
+        async with db.pool.acquire() as connection:
+            await connection.execute("""
+                UPDATE groups SET group_level = $2 WHERE id = $1
+            """, group_id, grp_level)
+    else:
+        async with db.pool.acquire() as connection:
+            await connection.execute("""
+                UPDATE groups SET group_level = $2 WHERE name = $1
+            """, level, grp_level)
         
     await callback.answer(f"Guruh darajasi {grp_level} etib belgilandi!", show_alert=True)
     
@@ -329,8 +366,13 @@ async def save_grp_lvl(callback: CallbackQuery, db: Database):
 async def score_students_list(callback: CallbackQuery, db: Database):
     level = callback.data.split(":")[1]
     
-    async with db.pool.acquire() as connection:
-        students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active'", level)
+    if level.isdigit():
+        group_id = int(level)
+        async with db.pool.acquire() as connection:
+            students = await connection.fetch("SELECT * FROM users WHERE group_id = $1 AND status = 'active'", group_id)
+    else:
+        async with db.pool.acquire() as connection:
+            students = await connection.fetch("SELECT * FROM users WHERE level = $1 AND status = 'active'", level)
     students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
         
     if not students:
@@ -354,7 +396,7 @@ async def process_astud_prof(callback: CallbackQuery, db: Database):
         
     from utils import get_student_profile_text, get_student_profile_keyboard
     text = await get_student_profile_text(student, db=db)
-    level = student.get('level')
+    level = student.get('group_id') or student.get('level')
     back_cb = f"admin_lvl:{level}" if level else "admin_levels_menu"
     kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
     
@@ -418,13 +460,23 @@ async def ask_for_score(callback: CallbackQuery, state: FSMContext, db: Database
         await callback.answer("O'quvchi topilmadi.", show_alert=True)
         return
         
+    group_id = student.get('group_id')
     group_name = student.get('level')
-    if not group_name:
-        await callback.answer("O'quvchining guruhi belgilanmagan.", show_alert=True)
-        return
-        
-    async with db.pool.acquire() as connection:
-        group = await connection.fetchrow("SELECT days FROM groups WHERE name = $1", group_name)
+    
+    if group_id:
+        group = await db.get_group(group_id)
+        if not group:
+            await callback.answer("Guruh topilmadi.", show_alert=True)
+            return
+    else:
+        if not group_name:
+            await callback.answer("O'quvchining guruhi belgilanmagan.", show_alert=True)
+            return
+        async with db.pool.acquire() as connection:
+            group = await connection.fetchrow("SELECT days, name FROM groups WHERE name = $1", group_name)
+        if not group:
+            await callback.answer("Guruh topilmadi.", show_alert=True)
+            return
     
     if not group or not group['days']:
         await callback.answer("Guruh yoki uning kunlari belgilanmagan.", show_alert=True)
@@ -441,7 +493,7 @@ async def ask_for_score(callback: CallbackQuery, state: FSMContext, db: Database
         return
 
     back_to_list = callback.data.startswith("score:")
-    group_param = data[2] if back_to_list and len(data) > 2 else group_name
+    group_param = data[2] if back_to_list and len(data) > 2 else (student.get('group_id') or group_name)
     
     await state.update_data(score_student_id=student_id, score_group_id=group_param, back_to_list=back_to_list)
     await callback.message.answer(f"O'quvchi uchun ballni kiriting (0-25):")

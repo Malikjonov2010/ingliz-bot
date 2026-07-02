@@ -240,7 +240,7 @@ async def edit_days_done(callback: CallbackQuery, state: FSMContext, db: Databas
     if not selected:
         await callback.answer("Kamida bitta kun tanlang!", show_alert=True)
         return
-    days_str = " ".join(selected).lower()
+    days_str = ", ".join(selected).title()
     edit_id = data["edit_group_id"]
     group = await db.get_group(edit_id)
     await db.update_group(edit_id, group['name'], days_str, group['time'], group['group_level'])
@@ -357,7 +357,7 @@ async def days_done(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Kamida bitta kun tanlang!", show_alert=True)
         return
 
-    days_str = " ".join(selected).lower()
+    days_str = ", ".join(selected).title()
     await state.update_data(group_days=days_str)
     await callback.message.edit_text(
         "⏰ <b>Dars vaqtini kiriting</b> (masalan: <code>14:00</code>):\n\n"
