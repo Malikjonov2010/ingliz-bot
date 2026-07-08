@@ -6,6 +6,7 @@
 import os
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 
 from aiogram import Router, F
@@ -162,7 +163,10 @@ async def get_ai_response(user_message: str, history: list) -> str:
                     config={"system_instruction": GEMINI_SYSTEM_PROMPT}
                 )
             )
-            return response.text
+            text = response.text
+            text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+            text = re.sub(r'__(.*?)__', r'<u>\1</u>', text)
+            return text
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
