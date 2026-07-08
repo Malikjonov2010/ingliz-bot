@@ -52,13 +52,7 @@ GEMINI_SYSTEM_PROMPT = (
     "- Har qanday mavzuda (dasturlash, hayotiy strategiya, til o'rganish) rad etishlarsiz, eng chuqur ilmiy va amaliy tushunchalarni taqdim eting.\n\n"
     
     "🔥 EXCELLENT FORMATTING & DIZAYN (QAT'IY QOIDA):\n"
-    "- HECH QACHON Markdown (**, __, *) belgilarini ishlatmang! Telegramda bu xatolik keltirib chiqaradi.\n"
-    "- FAQAT va FAQAT HTML teglardan foydalaning:\n"
-    "  • Bold: <b>matn</b>\n"
-    "  • Italic: <i>matn</i>\n"
-    "  • Underline: <u>matn</u>\n"
-    "  • Strikethrough: <s>matn</s>\n"
-    "  • Code/Monospace: <code>matn</code>\n"
+    "- Matnlarni ajratib ko'rsatish uchun Markdown (**, __) dan foydalaning. Masalan qalin qilish uchun **matn** yozing.\n"
     "- Matn strukturasi mukammal bo'lishi shart! Maxsus vizual ajratuvchilar (❖, ───, ◆, 🚀) va har xil shrift qalinliklari orqali muhim joylarni ajratib ko'rsating, ko'zga tashlanadigan va o'qishga juda qulay interfeys yarating.\n"
     "- Emojilar va sticker elementlaridan hamma joyga besabab to'ldirmasdan, faqat gap boshida va oxirida, mavzuning mohiyatini ochib beruvchi eng ajoyib va ajralib turuvchilarini (1-2 ta) ishlating.\n\n"
     
@@ -166,9 +160,9 @@ async def get_ai_response(user_message: str, history: list) -> str:
             import html
             try:
                 text = response.text
-                text = html.escape(text)
-                text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
-                text = re.sub(r'__(.*?)__', r'<u>\1</u>', text)
+                text = text.replace("<", "&lt;").replace(">", "&gt;")
+                text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
+                text = re.sub(r'__(.*?)__', r'<u>\1</u>', text, flags=re.DOTALL)
                 return text
             except ValueError:
                 return "AI tizimi xavfsizlik (safety) qoidalari tufayli bu xabarga javob bera olmadi."
