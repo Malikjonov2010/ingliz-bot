@@ -34,7 +34,7 @@ PURE_ADMIN_ID = 7053301759
 PREMIUM_PRICE = "20,000"
 PREMIUM_OLD_PRICE = "40,000"
 PREMIUM_DAYS = 30
-CARD_NUMBER = None  # Hali faol emas — karta kiritilmagan
+CARD_NUMBER = "4738 7205 9992 5900"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_SYSTEM_PROMPT = (
@@ -155,9 +155,8 @@ async def show_premium_info(message: Message, db: Database):
         return
 
     card_text = (
-        f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code>"
-        if CARD_NUMBER
-        else "💳 <b>Karta:</b> <i>Hali faol emas — tez orada qo'shiladi</i>"
+        f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code> infinBANK - Visa.\n"
+        f"👤 <b>Nomi:</b> Kozimjon V."
     )
 
     text = (
@@ -191,13 +190,7 @@ async def show_premium_info(message: Message, db: Database):
 @router.callback_query(F.data == "premium_buy")
 async def start_premium_payment(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
-    if CARD_NUMBER is None:
-        await callback.message.answer(
-            "⚠️ <b>Karta raqami hali faol emas.</b>\n\n"
-            "Admin tez orada karta raqamini qo'shadi. Iltimos kuting!",
-            parse_mode="HTML"
-        )
-        return
+    # Karta faollashtirilgan
     try:
         await callback.message.delete()
     except Exception:
