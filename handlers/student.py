@@ -487,6 +487,10 @@ async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
         await message.answer("Siz hali ro'yxatdan o'tmagansiz.")
         return
         
+    if user.get('is_blocked'):
+        await message.answer("⚠️ Bloklangan foydalanuvchilar o'z akkauntlarini o'chira olmaydilar.")
+        return
+        
     keyboard = ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
         resize_keyboard=True

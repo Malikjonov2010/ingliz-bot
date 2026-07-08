@@ -36,7 +36,11 @@ PREMIUM_OLD_PRICE = "40,000"
 PREMIUM_DAYS = 30
 CARD_NUMBER = "4738 7205 9992 5900"
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+_api_keys_str = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+GEMINI_API_KEYS = [k.strip() for k in _api_keys_str.split(",") if k.strip()]
+_current_key_index = 0
+_gemini_available = len(GEMINI_API_KEYS) > 0
+
 GEMINI_SYSTEM_PROMPT = (
     "Sen professional ingliz tili o'qituvchisi va tilshunos mutaxassisisan. "
     "Sening vazifang foydalanuvchilarga grammatika, lug'at boyligi, talaffuz va kontekstli tarjima "
@@ -45,14 +49,22 @@ GEMINI_SYSTEM_PROMPT = (
     "bermay, har doim aniq va o'quv jarayoniga mos javob ber."
 )
 
-try:
-    from google import genai
-    _genai_client = genai.Client(api_key=GEMINI_API_KEY)
-    _gemini_available = True
-except Exception as _ge:
-    _genai_client = None
-    _gemini_available = False
-    logger.warning(f"Gemini API sozlanmadi: {_ge}")
+def get_current_genai_client():
+    if not _gemini_available:
+        return None
+    try:
+        from google import genai
+        return genai.Client(api_key=GEMINI_API_KEYS[_current_key_index])
+    except Exception as e:
+        logger.error(f"GenAI Client yaratishda xato: {e}")
+        return None
+
+def rotate_api_key():
+    global _current_key_index
+    if not GEMINI_API_KEYS:
+        return
+    _current_key_index = (_current_key_index + 1) % len(GEMINI_API_KEYS)
+    logger.info(f"API kalit almashtirildi. Yangi indeks: {_current_key_index}")
 
 
 # ============================================================
@@ -93,28 +105,42 @@ def unblock_kb(user_id: int) -> InlineKeyboardMarkup:
 
 
 async def get_ai_response(user_message: str, history: list) -> str:
-    if not _gemini_available or _genai_client is None:
+    if not _gemini_available:
         return "AI hozircha mavjud emas. Iltimos keyinroq urinib ko'ring."
-    try:
-        contents = []
-        for h in history:
-            role = "user" if h["role"] == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": h["content"]}]})
-        contents.append({"role": "user", "parts": [{"text": user_message}]})
+        
+    contents = []
+    for h in history:
+        role = "user" if h["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": h["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: _genai_client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=contents,
-                config={"system_instruction": GEMINI_SYSTEM_PROMPT}
+    for attempt in range(len(GEMINI_API_KEYS)):
+        client = get_current_genai_client()
+        if not client:
+            return "AI tizimi sozlanmagan."
+            
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=contents,
+                    config={"system_instruction": GEMINI_SYSTEM_PROMPT}
+                )
             )
-        )
-        return response.text
-    except Exception as e:
-        logger.error(f"Gemini xatosi: {e}")
-        return f"AI javob bera olmadi. Xato: {str(e)[:150]}"
+            return response.text
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                logger.warning(f"API kalit limiti tugadi (index {_current_key_index}). Boshqasiga o'tilmoqda...")
+                rotate_api_key()
+                # Yana sikl boshidan davom etadi va yangi kalit bilan urinib ko'radi
+            else:
+                logger.error(f"Gemini xatosi: {e}")
+                return f"AI javob bera olmadi. Xato: {err_str[:150]}"
+                
+    return "Barcha AI API kalitlarining limiti tugadi. Iltimos birozdan so'ng urinib ko'ring."
 
 
 def _grade(scores: list) -> str:
@@ -197,7 +223,7 @@ async def start_premium_payment(callback: CallbackQuery, state: FSMContext):
         pass
     kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Orqaga")]], resize_keyboard=True)
     await callback.message.answer(
-        "💰 <b>Necha so'm to'ladingiz?</b>\n\n<i>Masalan: 20000</i>",
+        "💰 <b>Necha so'm to'ladingiz?</b>\n\n<i>premium 20 000 so'm</i>",
         parse_mode="HTML", reply_markup=kb
     )
     await state.set_state(PremiumPayment.waiting_for_amount)
@@ -307,8 +333,16 @@ async def premium_enter_photo(message: Message, state: FSMContext, db: Database)
 
     await state.clear()
     from handlers.student import get_user_keyboard
+    
+    warning_text = (
+        f"⚠️ <b>Diqqat! Sizning urinishingiz: {attempt_count}/2</b>\n"
+        "Agar yolg'on ma'lumot (noto'g'ri rasm yoki chek) yuborgan bo'lsangiz, bot tomonidan 1 oy muddatga bloklanasiz.\n"
+        "Agar 2/2 urinishda ham aldov yo'li bilan noto'g'ri ma'lumot kiritsangiz 3 oyga bloklanasiz va faqatgina davomat tugmasini ishlata olasiz."
+    )
+    
     await message.answer(
         "✅ <b>So'rovingiz yuborildi!</b>\n\n"
+        f"{warning_text}\n\n"
         "📋 Admin rasmingizni ko'rib, tez orada premiumni faollashtiradi.\n"
         "⏱ Odatda <b>30 daqiqa</b> ichida tasdiqlash bo'ladi. Sabr qiling! 🙏",
         parse_mode="HTML",
@@ -372,14 +406,14 @@ async def admin_approve_premium(callback: CallbackQuery, db: Database):
         logger.error(f"Referral tekshirishda xato: {e}")
 
     try:
-        new_caption = (callback.message.caption or "") + f"\n\n✅ <b>Tasdiqladi:</b> {callback.from_user.first_name}"
+        new_caption = (callback.message.caption or "") + f"\n\n✅ <b>Tasdiqlandi, o'quvchi premiumga ega bo'ldi!</b>"
         await callback.message.edit_caption(new_caption, parse_mode="HTML")
     except Exception:
         pass
 
 
 @router.callback_query(F.data.startswith("prem_block:"))
-async def admin_block_start(callback: CallbackQuery, state: FSMContext):
+async def admin_block_start(callback: CallbackQuery, state: FSMContext, db: Database):
     if callback.from_user.id != PURE_ADMIN_ID:
         await callback.answer("❌ Ruxsat yo'q.", show_alert=True)
         return
@@ -388,9 +422,13 @@ async def admin_block_start(callback: CallbackQuery, state: FSMContext):
     await state.update_data(target_user_id=user_id)
     await state.set_state(AdminBlockMsg.waiting_for_message)
     kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Bekor qilish")]], resize_keyboard=True)
+    
+    attempt_count = await db.get_user_premium_attempt_count(user_id)
+    block_days = 90 if attempt_count >= 2 else 30
+    
     await callback.message.answer(
         f"🚫 ID <code>{user_id}</code> bloklash uchun sabab yozing\n"
-        f"(Bu sabab o'quvchiga yuboriladi):",
+        f"(O'quvchi {block_days} kunga bloklanadi va sabab unga yuboriladi):",
         parse_mode="HTML", reply_markup=kb
     )
 
@@ -407,15 +445,18 @@ async def admin_confirm_block(message: Message, state: FSMContext, db: Database)
     user_id = int(data["target_user_id"])
     reason = message.text or "Sabab ko'rsatilmagan"
 
-    await db.block_user(user_id, reason, days=30)
+    attempt_count = await db.get_user_premium_attempt_count(user_id)
+    block_days = 90 if attempt_count >= 2 else 30
+
+    await db.block_user(user_id, reason, days=block_days)
 
     try:
         await message.bot.send_message(
             user_id,
-            f"🚫 <b>Hisobingiz 30 kunga bloklandi!</b>\n\n"
+            f"🚫 <b>Hisobingiz {block_days} kunga bloklandi!</b>\n\n"
             f"📝 <b>Sabab:</b> {reason}\n\n"
             f"⚠️ Bu muddat davomida faqat davomat funksiyasidan foydalanishingiz mumkin.\n"
-            f"🔓 Blok <b>30 kundan</b> keyin avtomatik ochiladi.",
+            f"🔓 Blok <b>{block_days} kundan</b> keyin avtomatik ochiladi.",
             parse_mode="HTML"
         )
     except Exception as e:
