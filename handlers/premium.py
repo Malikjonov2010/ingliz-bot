@@ -79,8 +79,8 @@ GEMINI_SYSTEM_PROMPT = (
     
     "🔄 DINAMIK MOTIVATSIYA VA CHAT DAVOMIYLIGI (CHATGPT & CLAUDE USLUBI):\n"
     "- Hech qachon bir xil qolipli gaplarni (masalan, 'Never stop learning') har javobda qaytarmang! Har safar vaziyatga, mavzuga va foydalanuvchining kayfiyatiga mos, uni ruhlantiruvchi turlicha daldalar bering.\n"
-    "- HAR BIR JAVOBINGIZ OXIRIDA chat to'xtab qolmasligi va foydalanuvchini botda ko'proq ushlab turish uchun shu mavzuga oid bitta qiziqarli va professional savol yoki taklif qoldiring. "
-    "(Masalan: 'Xohlasangiz, ushbu so'zning biroz yuqoriroq darajadagi sinonimlarini yoki boshqa ma'nolarini ham tahlil qilib chiqishimiz mumkin. Nima deysiz?', 'Keling, buni amaliyotda sinash uchun bitta misol yozib ko'rasizmi?'). Tegishli vaziyatda suhbatni yanada chuqurlashtirish uchun savollar berib boring."
+    "- 7. SUHBATNI YAKUNLASH: Suhbat oxirida hech qanday yodlangan daldalar, masalan 'Never stop learning', 'Never stop exploring' degan gaplarni yozmang! "
+    "Mavzuga doir tabiiy gapiring va agar o'rinli bo'lsa, xuddi insonlardek suhbatni davom ettirish uchun bitta qiziqarli savol qoldiring."
 )
 
 def get_current_genai_client():
@@ -163,10 +163,15 @@ async def get_ai_response(user_message: str, history: list) -> str:
                     config={"system_instruction": GEMINI_SYSTEM_PROMPT}
                 )
             )
-            text = response.text
-            text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
-            text = re.sub(r'__(.*?)__', r'<u>\1</u>', text)
-            return text
+            import html
+            try:
+                text = response.text
+                text = html.escape(text)
+                text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+                text = re.sub(r'__(.*?)__', r'<u>\1</u>', text)
+                return text
+            except ValueError:
+                return "AI tizimi xavfsizlik (safety) qoidalari tufayli bu xabarga javob bera olmadi."
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
@@ -683,7 +688,19 @@ async def handle_ai_message(message: Message, state: FSMContext, db: Database):
         await typing.delete()
     except Exception:
         pass
-    await message.answer(f"🤖 <b>AI Ustoz:</b>\n\n{response_text}", parse_mode="HTML")
+    try:
+        if len(response_text) > 3800:
+            for i in range(0, len(response_text), 3800):
+                await message.answer(f"🤖 <b>AI Ustoz:</b>\n\n{response_text[i:i+3800]}", parse_mode="HTML")
+        else:
+            await message.answer(f"🤖 <b>AI Ustoz:</b>\n\n{response_text}", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Xabar yuborishda xatolik: {e}")
+        try:
+            # Agar HTML parse xatosi bo'lsa, oddiy text formatda yuboramiz
+            await message.answer(f"🤖 AI Ustoz:\n\n{response_text[:4000]}")
+        except Exception:
+            await message.answer("❌ AI javobini yuborishda xatolik yuz berdi.")
 
 
 @router.callback_query(F.data == "prem_clear_ai")
