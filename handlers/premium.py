@@ -153,7 +153,7 @@ async def get_ai_response(user_message: str, history: list) -> str:
             response = await loop.run_in_executor(
                 None,
                 lambda: client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-pro",
                     contents=contents,
                     config={"system_instruction": GEMINI_SYSTEM_PROMPT}
                 )
