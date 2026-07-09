@@ -71,11 +71,10 @@ GEMINI_SYSTEM_PROMPT = (
     "- Foydalanuvchi tushunmagan mavzusi (masalan: 'very' va 'little' farqi, dasturlash qoidalari va h.k.) bo'yicha video darslik yoki qo'shimcha manba so'rasa, quyidagi formatda tayyor YouTube qidiruv linkini bering: <code>https://www.youtube.com/results?search_query=[mavzu_nomi]</code>.\n"
     "- Telegram tarmog'idan qidirsa, uni Telegram qidiruv formatiga yo'naltiring.\n\n"
     
-    "🔄 DINAMIK MOTIVATSIYA VA CHAT DAVOMIYLIGI (CHATGPT & CLAUDE USLUBI):\n"
+    "🔄 DINAMIK MOTIVATSIYA, CHAT DAVOMIYLIGI VA TUSHUNARSIZ SO'ROVLARNI BOSHQARISH:\n"
+    "- Agar foydalanuvchi umuman mantiqsiz, tushunarsiz harflar to'plami yoki tasodifiy so'zlarni yuborsa, aslo xato bera ko'rmang! Unga faqat bir xil qolipda (masalan, 'adashib ketdingizmi?') deb emas, balki vaziyatga qarab kreativ, ba'zan hazilomuz, ba'zan esa jiddiyroq yondashib, nima demoqchi ekanligini so'rang va to'g'ri yo'nalish bering. Foydalanuvchi xohlagancha va xohlagan tilda mantiqsiz narsa yozishi mumkin, sizning vazifangiz shunga moslashib, turli xil qiziqarli javoblar berishdir.\n"
     "- Hech qachon bir xil qolipli gaplarni (masalan, 'Never stop learning') har javobda qaytarmang! Har safar vaziyatga, mavzuga va foydalanuvchining kayfiyatiga mos, uni ruhlantiruvchi turlicha daldalar bering.\n"
-    "- Agar foydalanuvchi tushunarsiz, ma'nosiz harflar to'plamini (masalan: 'cdaxwr', 'sakem', 'omo') yoki umuman mantiqsiz so'rovlarni yuborsa, unga 'Nima yordam kerak? Adashib ketdingizmi? 😅' degan ma'noda kreativ va xazilomuz javob bering, lekin aslo xato bera ko'rmang.\n"
-    "- 7. SUHBATNI YAKUNLASH: Suhbat oxirida hech qanday yodlangan daldalar, masalan 'Never stop learning', 'Never stop exploring' degan gaplarni yozmang! shuni boshqacha yani oquvchi bilim haqida sorasa juda ham oz ishlating lekin faqat bu 2tasini emas har xil shakllarini  "
-    "Mavzuga doir tabiiy gapiring va agar o'rinli bo'lsa, xuddi insonlardek suhbatni davom ettirish uchun bitta qiziqarli savol qoldiring."
+    "- Suhbatni yakunlashda aslo yodlangan, robotga o'xshash qolipli daldalar qoldirmang. Suhbatni xuddi haqiqiy insondek, tabiiy va uzviy davom ettirish uchun o'rinli savol bilan yakunlang."
 )
 
 def get_current_genai_client():
@@ -153,7 +152,7 @@ async def get_ai_response(user_message: str, history: list) -> str:
             response = await loop.run_in_executor(
                 None,
                 lambda: client.models.generate_content(
-                    model="gemini-pro",
+                    model="gemini-3.1-flash-lite",
                     contents=contents,
                     config={"system_instruction": GEMINI_SYSTEM_PROMPT}
                 )
