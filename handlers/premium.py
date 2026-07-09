@@ -73,6 +73,7 @@ GEMINI_SYSTEM_PROMPT = (
     
     "🔄 DINAMIK MOTIVATSIYA VA CHAT DAVOMIYLIGI (CHATGPT & CLAUDE USLUBI):\n"
     "- Hech qachon bir xil qolipli gaplarni (masalan, 'Never stop learning') har javobda qaytarmang! Har safar vaziyatga, mavzuga va foydalanuvchining kayfiyatiga mos, uni ruhlantiruvchi turlicha daldalar bering.\n"
+    "- Agar foydalanuvchi tushunarsiz, ma'nosiz harflar to'plamini (masalan: 'cdaxwr', 'sakem', 'omo') yoki umuman mantiqsiz so'rovlarni yuborsa, unga 'Nima yordam kerak? Adashib ketdingizmi? 😅' degan ma'noda kreativ va xazilomuz javob bering, lekin aslo xato bera ko'rmang.\n"
     "- 7. SUHBATNI YAKUNLASH: Suhbat oxirida hech qanday yodlangan daldalar, masalan 'Never stop learning', 'Never stop exploring' degan gaplarni yozmang! "
     "Mavzuga doir tabiiy gapiring va agar o'rinli bo'lsa, xuddi insonlardek suhbatni davom ettirish uchun bitta qiziqarli savol qoldiring."
 )
@@ -101,7 +102,7 @@ def rotate_api_key():
 
 def premium_main_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 To'ladim — Premium olish", callback_data="premium_buy")],
+        [InlineKeyboardButton(text="💳 To'lash", callback_data="premium_buy")],
         [InlineKeyboardButton(text="❌ Yopish", callback_data="premium_close")]
     ])
 
@@ -152,7 +153,7 @@ async def get_ai_response(user_message: str, history: list) -> str:
             response = await loop.run_in_executor(
                 None,
                 lambda: client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash",
                     contents=contents,
                     config={"system_instruction": GEMINI_SYSTEM_PROMPT}
                 )
@@ -216,11 +217,6 @@ async def show_premium_info(message: Message, db: Database):
         )
         return
 
-    card_text = (
-        f"💳 <b>Karta raqami:</b> <code>{CARD_NUMBER}</code> infinBANK - Visa.\n"
-        f"👤 <b>Nomi:</b> Kozimjon V."
-    )
-
     text = (
         f"💎 <b>PREMIUM — 1 OY (30 KUN)</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -237,10 +233,7 @@ async def show_premium_info(message: Message, db: Database):
         f"  🏅 Guruh ichida o'rningiz (nechinchi)\n"
         f"  📅 Premium muddat va statistika\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{card_text}\n\n"
-        f"📌 To'lovdan so'ng <b>«💳 To'ladim»</b> tugmasini bosib "
-        f"screenshot, izoh va summani yuboring.\n"
-        f"⚡️ Tasdiqlash odatda <b>30 daqiqa</b> ichida bo'ladi."
+        f"📌 To'lov qilish uchun pastdagi <b>«💳 To'lash»</b> tugmasini bosing."
     )
     await message.answer(text, parse_mode="HTML", reply_markup=premium_main_kb())
 
@@ -252,14 +245,21 @@ async def show_premium_info(message: Message, db: Database):
 @router.callback_query(F.data == "premium_buy")
 async def start_premium_payment(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
-    # Karta faollashtirilgan
     try:
         await callback.message.delete()
     except Exception:
         pass
     kb = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Orqaga")]], resize_keyboard=True)
+    
+    card_text = (
+        f"💳 <b>Karta raqami:</b> <tg-spoiler>{CARD_NUMBER}</tg-spoiler>\n"
+        f"👤 <b>Nomi:</b> <tg-spoiler>Kozimjon V.</tg-spoiler> (infinBANK - Visa)"
+    )
+    
     await callback.message.answer(
-        "💰 <b>Necha so'm to'ladingiz?</b>\n\n<i>premium 20 000 so'm</i>",
+        f"{card_text}\n\n"
+        "💰 <b>Necha pul tashladingiz? Iltimos, raqamda yozing.</b>\n\n"
+        f"<i>premium {PREMIUM_PRICE} so'm</i>",
         parse_mode="HTML", reply_markup=kb
     )
     await state.set_state(PremiumPayment.waiting_for_amount)
@@ -286,25 +286,7 @@ async def premium_enter_amount(message: Message, state: FSMContext):
         return
     await state.update_data(amount=message.text.strip())
     await message.answer(
-        "📝 <b>Izoh yozing</b> (ixtiyoriy)\n\n"
-        "<i>Masalan: Karta orqali to'ladim</i>\n\n"
-        "Izohsiz o'tkazish uchun <b>–</b> yuboring.",
-        parse_mode="HTML"
-    )
-    await state.set_state(PremiumPayment.waiting_for_comment)
-
-
-@router.message(PremiumPayment.waiting_for_comment)
-async def premium_enter_comment(message: Message, state: FSMContext):
-    if message.text == "⬅️ Orqaga":
-        await state.clear()
-        from handlers.student import get_user_keyboard
-        await message.answer("❌ Bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
-        return
-    comment = message.text.strip() if message.text else "–"
-    await state.update_data(comment=comment)
-    await message.answer(
-        "📸 <b>To'lov screenshotini yuboring</b>\n\n"
+        "📸 <b>Endi to'lov screenshotini (rasmini) yuboring</b>\n\n"
         "Bank ilovasi yoki chek rasmini yuboring — tasdiqlash uchun kerak.",
         parse_mode="HTML"
     )
@@ -312,7 +294,7 @@ async def premium_enter_comment(message: Message, state: FSMContext):
 
 
 @router.message(PremiumPayment.waiting_for_photo)
-async def premium_enter_photo(message: Message, state: FSMContext, db: Database):
+async def premium_enter_photo(message: Message, state: FSMContext):
     if message.text == "⬅️ Orqaga":
         await state.clear()
         from handlers.student import get_user_keyboard
@@ -323,9 +305,33 @@ async def premium_enter_photo(message: Message, state: FSMContext, db: Database)
         return
 
     photo_id = message.photo[-1].file_id
+    await state.update_data(photo_id=photo_id)
+    
+    await message.answer(
+        "📝 <b>Izoh yozing</b> (ixtiyoriy)\n\n"
+        "<i>Masalan: Karta orqali to'ladim</i>\n\n"
+        "Izohsiz o'tkazish uchun <b>–</b> yuboring.",
+        parse_mode="HTML"
+    )
+    await state.set_state(PremiumPayment.waiting_for_comment)
+
+
+@router.message(PremiumPayment.waiting_for_comment)
+async def premium_enter_comment(message: Message, state: FSMContext, db: Database):
+    if message.text == "⬅️ Orqaga":
+        await state.clear()
+        from handlers.student import get_user_keyboard
+        await message.answer("❌ Bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
+        return
+
+    comment = message.text.strip() if message.text else "–"
     data = await state.get_data()
     amount = data.get("amount", "–")
-    comment = data.get("comment", "–")
+    photo_id = data.get("photo_id")
+
+    if not photo_id:
+        await message.answer("⚠️ Rasm topilmadi, iltimos qaytadan urinib ko'ring.")
+        return
 
     user = await db.get_user(message.from_user.id)
     if not user:
