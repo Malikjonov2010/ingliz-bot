@@ -640,28 +640,7 @@ async def show_student_rules(message: Message):
 async def catch_all_messages(message: Message, state: FSMContext, db: Database):
     user = await db.get_user(message.from_user.id)
 
-    # Bloklangan foydalanuvchi tekshiruvi (davomat bundan mustasno)
-    if user and message.from_user.id not in ADMIN_IDS:
-        if await db.is_blocked(message.from_user.id):
-            blocked_row = await db.pool.acquire()
-            async with db.pool.acquire() as conn:
-                block_info = await conn.fetchrow(
-                    "SELECT blocked_until, block_reason FROM users WHERE telegram_id = $1",
-                    message.from_user.id
-                )
-            if block_info and block_info['blocked_until']:
-                import pytz
-                tz_uz = pytz.timezone('Asia/Tashkent')
-                until_str = block_info['blocked_until'].astimezone(tz_uz).strftime("%d.%m.%Y")
-                await message.answer(
-                    f"🚫 <b>Hisobingiz bloklangan!</b>\n\n"
-                    f"📅 <b>Ochilish sanasi:</b> {until_str}\n"
-                    f"📝 <b>Sabab:</b> {block_info.get('block_reason', '—')}\n\n"
-                    f"Davomat funksiyasidan foydalanishingiz mumkin.",
-                    parse_mode="HTML"
-                )
-            return
-
+    # Bloklangan foydalanuvchi tekshiruvi endi BlockMiddleware orqali amalga oshiriladi
     if user and user.get('deletion_code') and message.text:
         text = message.text.strip()
         if text == user['deletion_code']:

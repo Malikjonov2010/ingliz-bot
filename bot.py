@@ -35,6 +35,10 @@ async def main():
     from handlers import premium as premium_handler
     
     from middlewares.subscription import SubscriptionMiddleware
+    from middlewares.block import BlockMiddleware
+    
+    dp.message.middleware(BlockMiddleware())
+    dp.callback_query.middleware(BlockMiddleware())
     dp.message.middleware(SubscriptionMiddleware())
     dp.callback_query.middleware(SubscriptionMiddleware())
     
