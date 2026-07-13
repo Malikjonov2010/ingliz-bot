@@ -691,20 +691,26 @@ async def handle_ai_message(message: Message, state: FSMContext, db: Database):
     def md_to_html(text: str) -> str:
         # Escape HTML special chars first
         text = html_lib.escape(text)
-        # ### headings -> <b>...</b>
+        
+        # Headings: ### Heading -> <b>Heading</b>
         text = re.sub(r'(?m)^#{1,6}\s*(.+)$', r'<b>\1</b>', text)
-        # **bold** -> <b>bold</b>
-        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
-        # __bold__ -> <b>bold</b>
-        text = re.sub(r'__(.+?)__', r'<b>\1</b>', text)
-        # *italic* or _italic_ -> <i>...</i>
-        text = re.sub(r'\*([^*\n]+?)\*', r'<i>\1</i>', text)
-        text = re.sub(r'_([^_\n]+?)_', r'<i>\1</i>', text)
-        # `code` -> <code>code</code>
+        
+        # Blockquotes: > quote -> <blockquote>quote</blockquote>
+        text = re.sub(r'(?m)^&gt;\s*(.+)$', r'<blockquote>\1</blockquote>', text)
+        
+        # Bold: **bold** (with DOTALL to support newlines)
+        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
+        
+        # Bold: __bold__
+        text = re.sub(r'__(.+?)__', r'<b>\1</b>', text, flags=re.DOTALL)
+        
+        # Code: `code`
         text = re.sub(r'`([^`]+?)`', r'<code>\1</code>', text)
-        # links [text](url) -> <a href="url">text</a>
+        
+        # Links: [text](url) -> <a href="url">text</a>
         text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
-        # ──  or --- separators keep as is
+        
+        # Return html
         return text
 
     html_response = md_to_html(response_text)
