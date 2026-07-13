@@ -564,9 +564,11 @@ async def admin_send_msg(message: Message, state: FSMContext):
     data = await state.get_data()
     user_id = int(data["target_user_id"])
     try:
+        import html
+        safe_text = html.escape(message.text)
         await message.bot.send_message(
             user_id,
-            f"📩 <b>Admindan xabar:</b>\n\n{message.text}",
+            f"🔔 <b>Admindan xabar:</b>\n\n{safe_text}",
             parse_mode="HTML"
         )
         await message.answer("✅ Xabar yuborildi!")

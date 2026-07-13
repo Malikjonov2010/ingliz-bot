@@ -108,7 +108,9 @@ async def process_broadcast(message: Message, state: FSMContext):
         ]
     )
     
-    await message.answer(f"Shu xabarni jo'natishni tasdiqlaysizmi?\n\n**Xabar:**\n{text_to_send}", reply_markup=keyboard, parse_mode="Markdown")
+    import html
+    safe_text = html.escape(text_to_send)
+    await message.answer(f"Shu xabarni jo'natishni tasdiqlaysizmi?\n\n<b>Xabar:</b>\n{safe_text}", reply_markup=keyboard, parse_mode="HTML")
     await state.set_state(AdminBroadcast.waiting_for_confirmation)
 
 @router.callback_query(AdminBroadcast.waiting_for_confirmation, F.data.startswith("confirm_broadcast:"))
@@ -133,12 +135,14 @@ async def confirm_broadcast(callback: CallbackQuery, state: FSMContext, db: Data
     await callback.message.answer(f"⏳ Xabar {len(users)} ta o'quvchiga fonda yuborilishni boshladi. Botdan bemalol foydalanishingiz mumkin!", reply_markup=get_user_keyboard(admin_id))
     await state.clear()
     
+    import html
+    safe_text = html.escape(text_to_send)
     import asyncio
     async def run_broadcast():
         count = 0
         for u in users:
             try:
-                await callback.bot.send_message(u['telegram_id'], f"📢 **Admindan xabar:**\n\n{text_to_send}", parse_mode="Markdown")
+                await callback.bot.send_message(u['telegram_id'], f"📢 <b>Admindan xabar:</b>\n\n{safe_text}", parse_mode="HTML")
                 count += 1
                 await asyncio.sleep(0.05) # Prevent rate limits
             except Exception:

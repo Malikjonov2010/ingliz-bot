@@ -560,10 +560,12 @@ async def process_admin_personal_message(message: Message, state: FSMContext, db
     data    = await state.get_data()
     stud_id = data.get("student_id")
 
+    import html
+    safe_text = html.escape(message.text)
     try:
         await message.bot.send_message(
             chat_id=stud_id,
-            text=f"👨‍🏫 <b>Ustozdan shaxsiy xabar:</b>\n\n{message.text}",
+            text=f"👨‍🏫 <b>Ustozdan shaxsiy xabar:</b>\n\n{safe_text}",
             parse_mode="HTML"
         )
         await state.clear()
