@@ -76,12 +76,21 @@ async def start_registration(message: Message, state: FSMContext):
 @router.message(Registration.waiting_for_full_name)
 async def process_full_name(message: Message, state: FSMContext):
     name = message.text.strip()
-    if len(name.split()) < 2:
-        await message.answer("⚠️ Iltimos, ism va familiyangizni to'liq kiriting (kamida 2 ta so'z)!")
+    import re
+    name = re.sub(r'\s+', ' ', name)
+    parts = name.split()
+    
+    if len(parts) not in [2, 3]:
+        await message.answer("⚠️ Iltimos, faqat ism va familiyangizni kiriting (orasi 1 yoki 2 ta bo'sh joy bilan ajratilgan bo'lishi kerak).")
         return
         
-    parts = name.split(maxsplit=1)
-    await state.update_data(first_name=parts[0], last_name=parts[1])
+    for part in parts:
+        clean_part = part.replace("'", "").replace("‘", "").replace("’", "")
+        if not clean_part.isalpha():
+            await message.answer("⚠️ Ism-familiyangizda raqamlar yoki maxsus belgilar (!@#$%^&* va h.k) bo'lishi mumkin emas!\nIltimos, to'g'ri ism-familiya kiriting:")
+            return
+            
+    await state.update_data(first_name=parts[0], last_name=" ".join(parts[1:]))
     
     await message.answer("📅 Yoshingizni kiriting (masalan: 16):")
     await state.set_state(Registration.waiting_for_age)

@@ -36,11 +36,14 @@ async def main():
     
     from middlewares.subscription import SubscriptionMiddleware
     from middlewares.block import BlockMiddleware
+    from middlewares.activity import ActivityMiddleware
     
     dp.message.middleware(BlockMiddleware())
     dp.callback_query.middleware(BlockMiddleware())
     dp.message.middleware(SubscriptionMiddleware())
     dp.callback_query.middleware(SubscriptionMiddleware())
+    dp.message.middleware(ActivityMiddleware())
+    dp.callback_query.middleware(ActivityMiddleware())
     
     dp.include_router(subscription.router)
     dp.include_router(registration.router)

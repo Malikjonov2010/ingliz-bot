@@ -251,7 +251,7 @@ async def view_students_in_level(callback: CallbackQuery, db: Database):
     extra_buttons = [nav_row] if nav_row else []
     kb = get_student_profile_keyboard(student['telegram_id'], back_callback_data=f"admin_lvl:{level}", extra_buttons=extra_buttons)
     
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("eval_studs:"))
 async def eval_students_list(callback: CallbackQuery, db: Database):
@@ -293,6 +293,44 @@ async def set_stud_level_opts(callback: CallbackQuery):
     ])
     
     await callback.message.edit_text("O'quvchi uchun darajani tanlang:", reply_markup=kb)
+
+@router.callback_query(F.data.startswith("approve_free_premium:"))
+async def process_approve_free_premium(callback: CallbackQuery, db: Database):
+    student_id = int(callback.data.split(":")[1])
+    
+    # 1 oylik premium qo'shish
+    from datetime import datetime, timedelta
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    
+    # Activate premium
+    async with db.pool.acquire() as connection:
+        now = datetime.now(tz_uz)
+        expires = now + timedelta(days=30)
+        
+        await connection.execute("""
+            INSERT INTO premium_users (user_id, activated_at, expires_at, activated_by) 
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id) 
+            DO UPDATE SET expires_at = GREATEST(premium_users.expires_at, EXCLUDED.activated_at) + INTERVAL '30 days', activated_at = EXCLUDED.activated_at
+        """, student_id, now, expires, callback.from_user.id)
+        
+    await callback.message.edit_text(callback.message.text + "\n\n✅ <b>Ruxsat berildi va Premium yoqildi!</b>", parse_mode="HTML")
+    
+    try:
+        await callback.bot.send_message(student_id, "🎉 <b>Tabriklaymiz!</b> Admin tomonidan sizga 1 oylik Tekin Premium yoqildi!\n\nIlova menyusidan 👑 Premium bo'limiga kirib imtiyozlardan foydalanishingiz mumkin.", parse_mode="HTML")
+    except Exception:
+        pass
+
+@router.callback_query(F.data.startswith("reject_free_premium:"))
+async def process_reject_free_premium(callback: CallbackQuery):
+    student_id = int(callback.data.split(":")[1])
+    await callback.message.edit_text(callback.message.text + "\n\n❌ <b>Rad etildi!</b>", parse_mode="HTML")
+    
+    try:
+        await callback.bot.send_message(student_id, "❌ Afsuski, sizning tekin Premium so'rovingiz admin tomonidan rad etildi.")
+    except Exception:
+        pass
 
 @router.callback_query(F.data.startswith("save_s_lvl:"))
 async def save_stud_lvl(callback: CallbackQuery, db: Database):
@@ -400,7 +438,7 @@ async def process_astud_prof(callback: CallbackQuery, db: Database):
     back_cb = f"admin_lvl:{level}" if level else "admin_levels_menu"
     kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
     
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("astud_score_info:"))
 async def process_astud_score_info(callback: CallbackQuery, db: Database):
@@ -432,18 +470,24 @@ async def process_astud_score_info(callback: CallbackQuery, db: Database):
     if scores:
         scores_list_text = "\n".join([f"📖 {s['lesson_number']}-dars: {s['score']} ball" for s in scores]) + "\n"
         
+    history_text = ""
+    history_cycles = stats.get('history', [])[:3]
+    if history_cycles:
+        history_text = "\n🗂 **Oldingi natijalar tarixi:**\n"
+        for idx, cycle in enumerate(history_cycles, 1):
+            att_info = cycle.get('attendance_count', 0)
+            history_text += f"{idx}-qism: {cycle['total_score']}/150 ball - {cycle['level']}\nDavomat: 6 darsdan {att_info} marta kelgan\n\n"
+        
     text = (f"📊 **O'quvchi o'zlashtirishi:**\n\n"
             f"O'tilgan darslar soni: {lesson_num}/6\n\n"
             f"{scores_list_text}\n"
             f"Joriy sikl bo'yicha to'plangan ball: {total_score}/150\n"
-            f"Hozirgi holati (darajasi): {current_level_str}\n")
+            f"Hozirgi holati (darajasi): {current_level_str}\n"
+            f"{history_text}")
     
     kb = []
     
-    if not has_score:
-        kb.append([InlineKeyboardButton(text="➕ Bugun uchun ball qo'yish (0-25)", callback_data=f"astud_score_add:{student_id}")])
-    else:
-        text += "\n✅ *Bugungi dars uchun ball qo'yilgan.*"
+    kb.append([InlineKeyboardButton(text="➕ Ball qo'yish (0-25)", callback_data=f"astud_score_add:{student_id}")])
         
     kb.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data=f"astud_prof:{student_id}")])
     
@@ -536,26 +580,50 @@ async def process_score(message: Message, state: FSMContext, db: Database):
         pass
         
     if lesson_num == 6:
-        level, emoji = await db.complete_cycle(student_id, total_score)
+        level, emoji, is_eligible = await db.complete_cycle(student_id, total_score)
         
+        # Avtomatik maqom berish (Support faqat qo'lda)
+        auto_level = None
+        if level == "Excellent":
+            auto_level = "Captain"
+        elif level == "Very Good":
+            auto_level = "Main"
+        elif level == "Good":
+            auto_level = "Learner"
+        elif level in ["Needs Improvement", "Weak"]:
+            auto_level = "Introductory"
+            
+        if auto_level:
+            await db.set_student_level(student_id, auto_level)
+            
         # Notify Teacher
         try:
             student = await db.get_user(student_id)
             student_name = f"{student['first_name']} {student['last_name']}" if student else "O'quvchi"
-            await message.bot.send_message(
-                message.from_user.id,
-                f"🏆 **Sikl yakunlandi!**\nO'quvchi {student_name} 6 ta dars yakuniga ko'ra **{total_score}/150** ball to'pladi. Darajasi: **{level} {emoji}**."
-            )
+            msg_text = f"🏆 **Sikl yakunlandi!**\nO'quvchi {student_name} 6 ta dars yakuniga ko'ra **{total_score}/150** ball to'pladi. Darajasi: **{level} {emoji}**."
+            if auto_level:
+                msg_text += f"\nAvtomatik ravishda {auto_level} maqomi berildi."
+            await message.bot.send_message(message.from_user.id, msg_text)
         except Exception:
             pass
 
         # Notify Student
         try:
-            await message.bot.send_message(
-                student_id,
-                f"🎉 *Tabriklaymiz!*\nSiz ushbu siklda umumiy {total_score}/150 ball to'pladingiz.\n\n🏆 Darajangiz: **{level} {emoji}**.\n\nKeyingi siklda yanada yuqori natijaga harakat qiling!",
-                parse_mode="Markdown"
-            )
+            stud_msg = f"🎉 *Tabriklaymiz!*\nSiz ushbu siklda umumiy {total_score}/150 ball to'pladingiz.\n\n🏆 Darajangiz: **{level} {emoji}**.\n\nKeyingi siklda yanada yuqori natijaga harakat qiling!"
+            if auto_level:
+                stud_msg += f"\nSizga {auto_level} maqomi tayinlandi!"
+            await message.bot.send_message(student_id, stud_msg, parse_mode="Markdown")
+        except Exception:
+            pass
+            
+        # Tekin premium tekshiruvi (3 marta Excellent)
+        if is_eligible:
+            from handlers.student import ask_for_free_premium
+            import asyncio
+            asyncio.create_task(ask_for_free_premium(message.bot, student_id))
+    else:
+        try:
+            await message.bot.send_message(message.from_user.id, f"✅ Ball qo'yildi! (Joriy tsikl: {lesson_num}/6)")
         except Exception:
             pass
 
@@ -634,7 +702,7 @@ async def process_astud_save_eng_lvl(callback: CallbackQuery, db: Database):
         level = student.get('level')
         back_cb = f"admin_lvl:{level}" if level else "admin_levels_menu"
         kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
-        await callback.message.answer(text, parse_mode="Markdown", reply_markup=kb)
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("astud_bio:"))
 async def process_astud_bio(callback: CallbackQuery, state: FSMContext):

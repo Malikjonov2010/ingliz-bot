@@ -480,7 +480,7 @@ async def view_astud_details(callback: CallbackQuery, db: Database):
     if not text:
         await callback.answer("O'quvchi topilmadi.", show_alert=True)
         return
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("astud_set_lvl:"))
@@ -508,7 +508,7 @@ async def astud_save_lvl(callback: CallbackQuery, db: Database):
 
     from utils import get_student_profile_text_and_keyboard
     text, kb = await get_student_profile_text_and_keyboard(db, stud_id)
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=kb)
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
 
 
 # ── Personal message ──────────────────────────────────────────────────────────

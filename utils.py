@@ -52,30 +52,39 @@ async def get_student_profile_text(student: dict, db=None, page_info: str = "") 
         days = student.get('days') or "Noma'lum"
         time = student.get('time') or "Noma'lum"
         
+    import html
+    
     bio = student.get('teacher_bio')
-    bio_text = f"\n\n📝 **Ustoz fikri:** {bio}" if bio else ""
+    bio_text = f"\n\n📝 <b>Ustoz fikri:</b> {html.escape(bio)}" if bio else ""
     
     level_val = student.get('level', "Noma'lum")
     student_level_val = student.get('student_level', 'Belgilanmagan')
     
     username = student.get('username')
-    username_text = f"**Username:** @{username}\n" if username else "**Username:** Yo'q\n"
-    profile_link = f"**Profil:** [{student['first_name']}](tg://user?id={student['telegram_id']})\n"
+    username_text = f"<b>Username:</b> @{html.escape(username)}\n" if username else "<b>Username:</b> Yo'q\n"
     
-    text = f"👤 **O'quvchi ma'lumotlari{page_info}:**\n" \
+    first_name = html.escape(student.get('first_name', ''))
+    last_name = html.escape(student.get('last_name', ''))
+    
+    age = student.get('age') or "Noma'lum"
+    phone = str(student.get('phone_number', '')).lstrip('+')
+    
+    profile_link = f"<b>Profil:</b> <a href='tg://user?id={student['telegram_id']}'>{first_name}</a>\n"
+    
+    text = f"👤 <b>O'quvchi ma'lumotlari{page_info}:</b>\n" \
            f"━━━━━━━━━━━━━━━━━━━\n" \
-           f"📛 **Ism-familiya:** {student['first_name']} {student['last_name']}\n" \
+           f"📛 <b>Ism-familiya:</b> {first_name} {last_name}\n" \
            f"🔗 {username_text}" \
            f"👤 {profile_link}" \
-           f"🎂 **Yosh:** {student['age']}\n" \
-           f"📞 **Tel:** +{str(student['phone_number']).lstrip('+')}\n" \
+           f"🎂 <b>Yosh:</b> {html.escape(str(age))}\n" \
+           f"📞 <b>Tel:</b> +{phone}\n" \
            f"━━━━━━━━━━━━━━━━━━━\n" \
-           f"🏫 **Guruh/Daraja:** {level_val}\n" \
-           f"🗓 **Kunlar:** {shorten_days(days)}\n" \
-           f"⏰ **Vaqti:** {time}\n" \
+           f"🏫 <b>Guruh/Daraja:</b> {html.escape(level_val)}\n" \
+           f"🗓 <b>Kunlar:</b> {html.escape(shorten_days(days))}\n" \
+           f"⏰ <b>Vaqti:</b> {html.escape(time)}\n" \
            f"━━━━━━━━━━━━━━━━━━━\n" \
-           f"🆔 **ID:** {student['telegram_id']}\n" \
-           f"🎓 **O'quvchi maqomi:** {student_level_val}" \
+           f"🆔 <b>ID:</b> {student['telegram_id']}\n" \
+           f"🎓 <b>O'quvchi maqomi:</b> {html.escape(student_level_val)}" \
            f"{bio_text}"
     return text
 
@@ -83,7 +92,7 @@ def get_student_profile_keyboard(student_id: int, back_callback_data: str = "ast
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     buttons = [
         [InlineKeyboardButton(text="🎓 Ingliz tili darajasi", callback_data=f"astud_eng_lvl:{student_id}")],
-        [InlineKeyboardButton(text="📝 Dars o'zlashtirishi", callback_data=f"astud_score_info:{student_id}")],
+        [InlineKeyboardButton(text="📊 Statistika", callback_data=f"astud_score_info:{student_id}")],
         [InlineKeyboardButton(text="📅 Oylik davomat tarixi", callback_data=f"astud_att_hist:{student_id}")],
         [InlineKeyboardButton(text="📝 Ustoz fikri (Bio) yozish", callback_data=f"astud_bio:{student_id}")],
         [InlineKeyboardButton(text="📩 Xabar yuborish", callback_data=f"astud_msg:{student_id}")]

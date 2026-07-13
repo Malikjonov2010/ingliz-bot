@@ -10,7 +10,7 @@ import json
 
 router = Router()
 
-def get_user_keyboard(user_id: int):
+def get_user_keyboard(user_id: int, is_premium: bool = False):
     if user_id in ADMIN_IDS:
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
@@ -21,9 +21,11 @@ def get_user_keyboard(user_id: int):
             resize_keyboard=True
         )
     else:
+        top_button_text = "🏆 Top 10 O'quvchi" if is_premium else "🏆 Top 3 O'quvchi"
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
                 [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
+                [KeyboardButton(text=top_button_text)],
                 [KeyboardButton(text="📈 Darslar o'zlashtirishim"), KeyboardButton(text="🎓 Sizning guruh darajangiz")],
                 [KeyboardButton(text="🏆 O'zingizni darajangiz"), KeyboardButton(text="📩 Ustozga xabar yuborish")],
                 [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")],
@@ -32,6 +34,10 @@ def get_user_keyboard(user_id: int):
             resize_keyboard=True
         )
     return keyboard
+
+async def get_async_user_keyboard(user_id: int, db: Database):
+    is_premium = await db.is_premium(user_id)
+    return get_user_keyboard(user_id, is_premium)
 
 @router.message(F.text == "🙋‍♂️ Davomat", StateFilter(None))
 async def mark_attendance(message: Message, db: Database):
@@ -49,7 +55,7 @@ async def mark_attendance(message: Message, db: Database):
         try:
             lesson_days = json.loads(days_json)
             if today_weekday not in lesson_days:
-                await message.answer("⚠️ Siz faqat dars kuningizda davomat belgilay olasiz!", reply_markup=get_user_keyboard(message.from_user.id))
+                await message.answer("⚠️ Siz faqat dars kuningizda davomat belgilay olasiz!", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
                 return
         except:
             pass # fallback if not json
@@ -169,7 +175,7 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
     success, msg = await db.mark_attendance(user_id, today_date, is_present=False, reason=reason)
     
     if not success:
-        await message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz.", reply_markup=get_user_keyboard(message.from_user.id))
+        await message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz.", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
         await state.clear()
         return
         
@@ -197,8 +203,41 @@ async def process_absence_reason(message: Message, state: FSMContext, db: Databa
     from utils import notify_admins_async
     await notify_admins_async(message.bot, admin_text, ADMIN_IDS)
             
-    await message.answer(f"✅ Sababi adminga yuborildi. Rahmat!\n📅 Vaqt: {current_time}\nHolat: Kelmagan", reply_markup=get_user_keyboard(message.from_user.id))
+    await message.answer(f"✅ Sababi adminga yuborildi. Rahmat!\n📅 Vaqt: {current_time}\nHolat: Kelmagan", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
     await state.clear()
+
+@router.message(F.text.in_(["🏆 Top 3 O'quvchi", "🏆 Top 10 O'quvchi"]), StateFilter(None))
+async def show_top_students(message: Message, db: Database):
+    user_id = message.from_user.id
+    user = await db.get_user(user_id)
+    if not user or user['status'] != 'active':
+        await message.answer("⚠️ Sizning hisobingiz faol emas yoki ro'yxatdan o'tmagansiz.")
+        return
+        
+    is_premium = await db.is_premium(user_id)
+    limit = 10 if is_premium else 3
+    
+    await message.answer("⏳ Hisoblanmoqda... (Barcha o'quvchilar natijalari solishtirilmoqda)")
+    
+    rankings = await db.get_rankings()
+    top_list = rankings[:limit]
+    
+    if not top_list:
+        await message.answer("Hozircha yetarli ma'lumot yo'q.")
+        return
+        
+    text = f"🏆 **Bot bo'yicha TOP {limit} ta eng kuchli o'quvchilar:**\n\n"
+    medals = ["🥇", "🥈", "🥉"]
+    for idx, r in enumerate(top_list):
+        medal = medals[idx] if idx < 3 else "🏅"
+        text += f"{medal} **{idx+1}-o'rin:** {r['name']}\n"
+        text += f"   Darajasi: {r['level']}\n"
+        text += f"   Joriy darslar balli: {r['current_score']}/150\n"
+        text += f"   Botdagi faolligi: {r['activity_score']} ball\n\n"
+        
+    text += "*(Reyting o'zlashtirish ballari, davomat, maqom va botdagi faollikka qarab avtomatik hisoblanadi)*"
+    
+    await message.answer(text, parse_mode="Markdown")
 
 @router.message(F.text == "📊 Mening Natijalarim", StateFilter(None))
 async def show_dashboard(message: Message, db: Database):
@@ -209,26 +248,57 @@ async def show_dashboard(message: Message, db: Database):
         await message.answer("⚠️ Sizning hisobingiz faol emas yoki ro'yxatdan o'tmagansiz.")
         return
         
+    await message.answer("⏳ Ma'lumotlaringiz yuklanmoqda...")
+    
     stats = await db.get_user_stats(user_id)
-    last_score = stats['last_score']
-    current_cycle_total = stats['current_cycle_total']
+    current_cycle_scores = stats.get('current_cycle_scores', [])
+    current_cycle_total = stats.get('current_cycle_total', 0)
     
-    history_text = "📂 **Oldingi natijalar tarixi (History):**\n"
-    if stats['history']:
-        for h in stats['history']:
-            history_text += f"🔹 *{h['cycle_number']}-sikl:* {h['total_score']}/150 ({h['level']})\n"
+    # Calculate global and group rank
+    rankings = await db.get_rankings()
+    global_rank = 0
+    group_rank = 0
+    group_rank_counter = 1
+    
+    my_group_id = user.get('group_id')
+    
+    for idx, r in enumerate(rankings, 1):
+        if r['user_id'] == user_id:
+            global_rank = idx
+            group_rank = group_rank_counter
+            break
+        if r['group_id'] == my_group_id:
+            group_rank_counter += 1
+            
+    scores_text = "📊 **Joriy 6 ta darslik bo'yicha natijalaringiz:**\n"
+    if current_cycle_scores:
+        for s in current_cycle_scores:
+            scores_text += f"🔹 {s['lesson_number']}-dars: {s['score']} ball\n"
     else:
-        history_text += "Hali tarix mavjud emas.\n"
-
-    dashboard = f"""👤 **Profilingiz**
-━━━━━━━━━━━━━━━━━━
-📛 **Ism:** {user['first_name']} {user['last_name']}
-🎯 **Oxirgi darsdagi ball:** {last_score}/25
-📊 **Joriy sikl (Jami):** {current_cycle_total}/150
-━━━━━━━━━━━━━━━━━━
-{history_text}"""
+        scores_text += "Hozircha joriy siklda ballar yo'q.\n"
+        
+    scores_text += f"\n**Joriy sikldagi umumiy ball:** {current_cycle_total}/150\n"
     
-    await message.answer(dashboard, parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
+    rank_text = (
+        f"🏆 **Sizning Reytingdagi O'rningiz:**\n\n"
+        f"👥 O'z guruhingizda: **{group_rank}-o'rindasiz!**\n"
+        f"🌐 Barcha o'quvchilar orasida: **{global_rank}-o'rindasiz!**\n\n"
+        f"💡 _Izoh: Sizning o'rningiz darslardagi o'zlashtirishingiz (ballaringiz), vazifalarni vaqtida bajarishingiz, davomatingiz va botdagi faolligingizga qarab avtomatik ravishda reyting qilinadi._"
+    )
+    
+    is_premium = await db.is_premium(user_id)
+    history_text = ""
+    if is_premium:
+        history_text = "\n\n📂 **Oldingi natijalar tarixi (Premium History):**\n"
+        if stats.get('history'):
+            for h in stats['history']:
+                history_text += f"🔹 *{h['cycle_number']}-sikl:* {h['total_score']}/150 ({h['level']})\n"
+        else:
+            history_text += "Hali tarix mavjud emas.\n"
+    
+    dashboard = f"👤 **{user['first_name']} {user['last_name']}**\n\n{scores_text}\n{rank_text}{history_text}"
+    
+    await message.answer(dashboard, parse_mode="Markdown", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
 
 @router.message(F.text == "📈 Darslar o'zlashtirishim", StateFilter(None))
 async def show_detailed_dashboard(message: Message, db: Database):
@@ -278,7 +348,7 @@ async def show_detailed_dashboard(message: Message, db: Database):
 🏅 **O'zlashtirish:** {grade}
 {bio_text}"""
     
-    await message.answer(text, parse_mode="Markdown", reply_markup=get_user_keyboard(message.from_user.id))
+    await message.answer(text, parse_mode="Markdown", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
 
 @router.message(F.text == "🎓 Sizning guruh darajangiz", StateFilter(None))
 async def show_group_level(message: Message, db: Database):
@@ -377,7 +447,7 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
     user_id = message.from_user.id
     is_premium = await db.is_premium(user_id)
 
-    # Limit tekshiruvi
+    # Limit va Dars kuni tekshiruvi
     if is_premium:
         if not await db.can_send_teacher_message_premium(user_id):
             await message.answer(
@@ -386,11 +456,25 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
             )
             return
     else:
+        # Odatiy o'quvchi uchun dars kuni yozish mumkin emas
+        from datetime import date
+        import json
+        today_weekday = date.today().weekday()
+        days_json = user.get('days')
+        if days_json:
+            try:
+                lesson_days = json.loads(days_json)
+                if today_weekday in lesson_days:
+                    await message.answer("⚠️ Siz dars kuni ustozga yoza olmaysiz, ustozning o'ziga ayting!")
+                    return
+            except:
+                pass
+                
         if not await db.can_send_teacher_message(user_id):
             await message.answer(
-                "🚫 Kechirasiz, siz bugun ustozga 3 marta xabar yuborib bo'ldingiz.\n"
+                "🚫 Kechirasiz, siz bugun ustozga xabar yuborish limitini (1 ta) tugatdingiz.\n"
                 "Ertaga yana urinib ko'ring!\n\n"
-                "💡 <b>Premium</b> obuna bilan kuniga 10 ta xabar va kanalga obunasiz yuborish mumkin!",
+                "💡 <b>Premium</b> obuna bilan kuniga 10 ta ixtiyoriy xabar (ovozli, rasm, fayl) va kanalga obunasiz yuborish mumkin!",
                 parse_mode="HTML"
             )
             return
@@ -501,7 +585,7 @@ async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
 @router.message(F.text == "⬅️ Orqaga", StateFilter(Deletion.waiting_for_reason, Deletion.waiting_for_code))
 async def cancel_deletion(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("❌ Amaliyot bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
+    await message.answer("❌ Amaliyot bekor qilindi.", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
 
 @router.message(Deletion.waiting_for_reason)
 async def process_deletion_reason(message: Message, state: FSMContext, db: Database):
@@ -597,22 +681,34 @@ async def process_teacher_sub(callback: CallbackQuery, state: FSMContext, db: Da
 
 @router.message(TeacherMessage.waiting_for_message)
 async def process_teacher_message(message: Message, state: FSMContext, db: Database):
-    text = message.text.strip() if message.text else ""
+    text = message.text.strip() if message.text else message.caption.strip() if message.caption else ""
+    user_id = message.from_user.id
+    is_premium = await db.is_premium(user_id)
     
     if text == "⬅️ Orqaga":
         await state.clear()
-        keyboard = get_user_keyboard(message.from_user.id)
+        keyboard = await get_async_user_keyboard(user_id, db)
         await message.answer("Bosh menyuga qaytdingiz.", reply_markup=keyboard)
         return
 
-    if not text or text.startswith('/'):
-        await message.answer("⚠️ Iltimos, faqat matnli xabar yuboring.")
+    # Check for media limitation
+    has_media = message.photo or message.video or message.audio or message.document or message.voice
+    if not is_premium and has_media:
+        await message.answer(
+            "⚠️ Odatiy o'quvchilar ustozga faqatgina **matnli xabar (text)** yuborishi mumkin!\n\n"
+            "Agar ovozli xabar, fayl yoki rasm yubormoqchi bo'lsangiz hamda kuniga 10 marta yozishni xohlasangiz **Premium** obuna oling! 💎",
+            parse_mode="Markdown"
+        )
+        return
+
+    if not is_premium and (not text or text.startswith('/')):
+        await message.answer("⚠️ Iltimos, ustozga o'z matnli xabaringizni yozing.")
         return
         
-    user = await db.get_user(message.from_user.id)
+    user = await db.get_user(user_id)
     name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else message.from_user.full_name
     
-    await db.log_teacher_message(message.from_user.id)
+    await db.log_teacher_message(user_id)
     
     from utils import notify_admins_async, get_student_profile_text, get_student_profile_keyboard
     
@@ -620,14 +716,22 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
     import pytz
     tz_uz = pytz.timezone('Asia/Tashkent')
     current_time = datetime.now(tz_uz).strftime('%Y-%m-%d %H:%M')
-    admin_text = f"{profile_text}\n\n💬 **O'quvchi xabari:**\n{text}\n\n⏳ **Yuborilgan vaqt:** {current_time}"
+    
+    admin_text = f"{profile_text}\n\n💬 <b>O'quvchi xabari:</b>\n{text}\n\n⏳ <b>Yuborilgan vaqt:</b> {current_time}"
     kb = get_student_profile_keyboard(user['telegram_id'], back_callback_data="astud_list")
-                 
-    import asyncio
-    asyncio.create_task(notify_admins_async(message.bot, admin_text, ADMIN_IDS, parse_mode="Markdown", reply_markup=kb))
+    
+    # Send message or forward media to admins
+    for a_id in ADMIN_IDS:
+        try:
+            if has_media:
+                await message.copy_to(chat_id=a_id, caption=admin_text, parse_mode="HTML", reply_markup=kb)
+            else:
+                await message.bot.send_message(chat_id=a_id, text=admin_text, parse_mode="HTML", reply_markup=kb)
+        except Exception as e:
+            print(f"Failed to send to admin {a_id}: {e}")
     
     await state.clear()
-    keyboard = get_user_keyboard(message.from_user.id)
+    keyboard = await get_async_user_keyboard(message.from_user.id, db)
     await message.answer("✅ Xabaringiz ustozga yuborildi. Rahmat!", reply_markup=keyboard)
 
 
@@ -704,3 +808,75 @@ async def show_attendance_history(callback: CallbackQuery, db: Database):
     )
     
     await callback.message.answer(text, parse_mode="Markdown")
+
+async def ask_for_free_premium(bot, student_id):
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    
+    text = (
+        "🎉 <b>Tabriklaymiz!</b>\n\n"
+        "Siz qatorasiga 3 oy (3 ta tsikl) davomida to'xtovsiz Excellent natija va Support maqomini o'zingizda saqlab qoldingiz!\n"
+        "Shu sababli sizga 1 oylik <b>Tekin Premium</b> taqdim etilmoqda.\n\n"
+        "Premium olishga rozimisiz?"
+    )
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Roziman (Olish)", callback_data=f"claim_free_premium:yes:{student_id}")],
+        [InlineKeyboardButton(text="ℹ️ Premium haqida ma'lumot", callback_data="premium_info_btn")]
+    ])
+    
+    try:
+        await bot.send_message(student_id, text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        pass
+
+@router.callback_query(F.data.startswith("claim_free_premium:"))
+async def process_claim_free_premium(callback: CallbackQuery, db: Database):
+    data = callback.data.split(":")
+    action = data[1]
+    student_id = int(data[2])
+    
+    if action == "yes":
+        await callback.message.edit_text("✅ So'rovingiz adminga yuborildi. Kuting...")
+        
+        # Adminlarga yuborish
+        student = await db.get_user(student_id)
+        first_name = student.get('first_name', '')
+        last_name = student.get('last_name', '')
+        username = f"@{student.get('username')}" if student.get('username') else "Yo'q"
+        
+        # 3 oylik natijalarni olish
+        async with db.pool.acquire() as connection:
+            recent_cycles = await connection.fetch("SELECT cycle_number, total_score, level FROM cycles WHERE user_id = $1 ORDER BY cycle_number DESC LIMIT 3", student_id)
+            
+        history_str = ""
+        for idx, c in enumerate(recent_cycles, 1):
+            history_str += f"{idx}-qism: {c['total_score']}/150 ball - {c['level']}\n"
+            
+        admin_msg = (
+            f"🎁 <b>Premium So'rov (Avtomatik):</b>\n\n"
+            f"O'quvchi {first_name} {last_name} ({username}) qatorasiga 3 marta Excellent oldi va 1 oylik tekin Premium olishga rozi bo'ldi.\n\n"
+            f"Natijalar tarixi:\n{history_str}\n"
+            f"Ushbu o'quvchiga 1 oylik tekin Premium ochib beramizmi?"
+        )
+        
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        from config import ADMIN_IDS
+        admin_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Ruxsat berish", callback_data=f"approve_free_premium:{student_id}")],
+            [InlineKeyboardButton(text="❌ Rad etish", callback_data=f"reject_free_premium:{student_id}")]
+        ])
+        
+        from utils import notify_admins_async
+        import asyncio
+        asyncio.create_task(notify_admins_async(callback.bot, admin_msg, ADMIN_IDS, parse_mode="HTML", reply_markup=admin_kb))
+        
+@router.callback_query(F.data == "premium_info_btn")
+async def process_premium_info_btn(callback: CallbackQuery):
+    info_text = (
+        "💎 <b>Premium nima beradi?</b>\n\n"
+        "- Bot fonini va dizaynini o'zgartirish (qora fon, maxsus dizayn)\n"
+        "- Darsliklardan va barcha materiallardan cheklovlarsiz foydalanish\n"
+        "- Qo'shimcha funksiyalar va qulayliklar.\n\n"
+        "Davom etish uchun yuqoridagi 'Roziman' tugmasini bosing!"
+    )
+    await callback.answer(info_text, show_alert=True)
