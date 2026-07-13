@@ -144,24 +144,13 @@ CREATE INDEX IF NOT EXISTS idx_premium_requests_status ON premium_requests(statu
 -- Faol premium foydalanuvchilar
 CREATE TABLE IF NOT EXISTS premium_users (
     id SERIAL PRIMARY KEY,
-    telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE UNIQUE,
+    user_id BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE UNIQUE,
     activated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP WITH TIME ZONE,
     activated_by BIGINT
 );
 CREATE INDEX IF NOT EXISTS idx_premium_users_expires ON premium_users(expires_at);
-CREATE INDEX IF NOT EXISTS idx_premium_users_tid ON premium_users(telegram_id);
--- Support old column name (user_id alias)
-DO $$
-BEGIN
-  IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='premium_users' AND column_name='user_id') THEN
-    -- Already migrated or old table, add telegram_id if not exists
-    IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='premium_users' AND column_name='telegram_id') THEN
-      ALTER TABLE premium_users ADD COLUMN telegram_id BIGINT;
-      UPDATE premium_users SET telegram_id = user_id;
-    END IF;
-  END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS idx_premium_users_uid ON premium_users(user_id);
 
 -- Referral tizimi
 CREATE TABLE IF NOT EXISTS referral_uses (

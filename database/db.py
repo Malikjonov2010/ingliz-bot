@@ -371,7 +371,7 @@ class Database:
         from datetime import datetime, timezone
         async with self.pool.acquire() as connection:
             row = await connection.fetchrow(
-                "SELECT expires_at FROM premium_users WHERE telegram_id = $1", user_id
+                "SELECT expires_at FROM premium_users WHERE user_id = $1", user_id
             )
             if not row:
                 return False
@@ -380,7 +380,7 @@ class Database:
     async def get_premium_info(self, user_id: int):
         async with self.pool.acquire() as connection:
             return await connection.fetchrow(
-                "SELECT * FROM premium_users WHERE telegram_id = $1", user_id
+                "SELECT * FROM premium_users WHERE user_id = $1", user_id
             )
 
     async def activate_premium(self, user_id: int, activated_by: int, days: int = 30):
@@ -388,15 +388,15 @@ class Database:
         expires_at = datetime.now(timezone.utc) + timedelta(days=days)
         async with self.pool.acquire() as connection:
             await connection.execute("""
-                INSERT INTO premium_users (telegram_id, activated_by, expires_at)
+                INSERT INTO premium_users (user_id, activated_by, expires_at)
                 VALUES ($1, $2, $3)
-                ON CONFLICT (telegram_id) DO UPDATE
+                ON CONFLICT (user_id) DO UPDATE
                 SET expires_at = EXCLUDED.expires_at, activated_by = EXCLUDED.activated_by
             """, user_id, activated_by, expires_at)
 
     async def remove_premium(self, user_id: int):
         async with self.pool.acquire() as connection:
-            await connection.execute("DELETE FROM premium_users WHERE telegram_id = $1", user_id)
+            await connection.execute("DELETE FROM premium_users WHERE user_id = $1", user_id)
 
     # ─── MESSAGING METHODS ──────────────────────────────────────────────────────
 
