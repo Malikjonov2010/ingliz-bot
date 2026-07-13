@@ -425,6 +425,29 @@ async def add_group_time(message: Message, state: FSMContext, db: Database):
 
 
 # ── Students list ─────────────────────────────────────────────────────────────
+
+def _get_student_page_kb(students, page: int = 0, page_size: int = 10):
+    start = page * page_size
+    end = start + page_size
+    
+    kb = []
+    for s in students[start:end]:
+        kb.append([InlineKeyboardButton(
+            text=f"👤 {s['first_name']} {s['last_name']}",
+            callback_data=f"astud:{s['telegram_id']}"
+        )])
+        
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(text="⬅️ Oldingi", callback_data=f"astud_page:{page-1}"))
+    if end < len(students):
+        nav_row.append(InlineKeyboardButton(text="Keyingi ➡️", callback_data=f"astud_page:{page+1}"))
+        
+    if nav_row:
+        kb.append(nav_row)
+        
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
 @router.message(F.text == "👤 O'quvchilarni ko'rish", StateFilter(None))
 async def view_students_menu(message: Message, db: Database):
     if message.from_user.id not in ADMIN_IDS:
@@ -436,33 +459,30 @@ async def view_students_menu(message: Message, db: Database):
         await message.answer("Hozircha ro'yxatdan o'tgan o'quvchilar yo'q.")
         return
 
-    kb = []
-    for s in students[:90]:
-        kb.append([InlineKeyboardButton(
-            text=f"👤 {s['first_name']} {s['last_name']}",
-            callback_data=f"astud:{s['telegram_id']}"
-        )])
-
     await message.answer(
         f"👤 <b>Barcha o'quvchilar ro'yxati ({len(students)} ta):</b>\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
+        reply_markup=_get_student_page_kb(students, 0),
         parse_mode="HTML"
     )
-
 
 @router.callback_query(F.data == "astud_list")
 async def back_to_astud_list(callback: CallbackQuery, db: Database):
     students = await db.get_active_users()
     students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
-    kb = []
-    for s in students[:90]:
-        kb.append([InlineKeyboardButton(
-            text=f"👤 {s['first_name']} {s['last_name']}",
-            callback_data=f"astud:{s['telegram_id']}"
-        )])
     await callback.message.edit_text(
         f"👤 <b>Barcha o'quvchilar ro'yxati ({len(students)} ta):</b>\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=kb),
+        reply_markup=_get_student_page_kb(students, 0),
+        parse_mode="HTML"
+    )
+
+@router.callback_query(F.data.startswith("astud_page:"))
+async def astud_page_nav(callback: CallbackQuery, db: Database):
+    page = int(callback.data.split(":")[1])
+    students = await db.get_active_users()
+    students = [s for s in students if s['telegram_id'] not in ADMIN_IDS and s['telegram_id'] not in TEACHER_IDS]
+    await callback.message.edit_text(
+        f"👤 <b>Barcha o'quvchilar ro'yxati ({len(students)} ta):</b>\nBatafsil ma'lumot va boshqarish uchun o'quvchini tanlang:",
+        reply_markup=_get_student_page_kb(students, page),
         parse_mode="HTML"
     )
 

@@ -57,17 +57,17 @@ async def get_student_profile_text(student: dict, db=None, page_info: str = "") 
     bio = student.get('teacher_bio')
     bio_text = f"\n\n📝 <b>Ustoz fikri:</b> {html.escape(bio)}" if bio else ""
     
-    level_val = student.get('level', "Noma'lum")
-    student_level_val = student.get('student_level', 'Belgilanmagan')
+    level_val = student.get('level') or "Noma'lum"
+    student_level_val = student.get('student_level') or 'Belgilanmagan'
     
     username = student.get('username')
     username_text = f"<b>Username:</b> @{html.escape(username)}\n" if username else "<b>Username:</b> Yo'q\n"
     
-    first_name = html.escape(student.get('first_name', ''))
-    last_name = html.escape(student.get('last_name', ''))
+    first_name = html.escape(student.get('first_name') or '')
+    last_name = html.escape(student.get('last_name') or '')
     
     age = student.get('age') or "Noma'lum"
-    phone = str(student.get('phone_number', '')).lstrip('+')
+    phone = str(student.get('phone_number') or '').lstrip('+')
     
     profile_link = f"<b>Profil:</b> <a href='tg://user?id={student['telegram_id']}'>{first_name}</a>\n"
     
