@@ -24,12 +24,12 @@ def get_user_keyboard(user_id: int, is_premium: bool = False):
         top_button_text = "🏆 Top 10 O'quvchi" if is_premium else "🏆 Top 3 O'quvchi"
         keyboard = ReplyKeyboardMarkup(
             keyboard=[
-                [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text="📊 Mening Natijalarim")],
-                [KeyboardButton(text=top_button_text)],
-                [KeyboardButton(text="📈 Darslar o'zlashtirishim"), KeyboardButton(text="🎓 Sizning guruh darajangiz")],
-                [KeyboardButton(text="🏆 O'zingizni darajangiz"), KeyboardButton(text="📩 Ustozga xabar yuborish")],
-                [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")],
-                [KeyboardButton(text="💰 Oylik to'lov"), KeyboardButton(text="💎 Premium")]
+                [KeyboardButton(text="🙋‍♂️ Davomat"), KeyboardButton(text=top_button_text)],
+                [KeyboardButton(text="📈 Darslar o'zlashtirishim"), KeyboardButton(text="📊 Mening Natijalarim")],
+                [KeyboardButton(text="🏆 O'zingizni darajangiz"), KeyboardButton(text="🎓 Sizning guruh darajangiz")],
+                [KeyboardButton(text="💎 Premium"), KeyboardButton(text="📩 Ustozga xabar yuborish")],
+                [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="💰 Oylik to'lov")],
+                [KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
             ],
             resize_keyboard=True
         )
