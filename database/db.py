@@ -164,25 +164,6 @@ class Database:
             )
             return count < 1
 
-
-            if row['is_blocked'] and row['blocked_until']:
-                from datetime import datetime, timezone
-                now = datetime.now(timezone.utc)
-                if row['blocked_until'] > now:
-                    return True
-                else:
-                    # Expired
-                    await connection.execute(
-                        "UPDATE users SET is_blocked = FALSE, blocked_until = NULL WHERE telegram_id = $1",
-                        user_id
-                    )
-                    return False
-            return False
-
-
-
-
-            
     async def has_score_today(self, user_id: int) -> bool:
         async with self.pool.acquire() as connection:
             count = await connection.fetchval("SELECT COUNT(*) FROM scores WHERE user_id = $1 AND date = CURRENT_DATE", user_id)
@@ -383,3 +364,228 @@ class Database:
                 
             rankings.sort(key=lambda x: x['total_points'], reverse=True)
             return rankings
+
+    # ─── PREMIUM METHODS ────────────────────────────────────────────────────────
+
+    async def is_premium(self, user_id: int) -> bool:
+        from datetime import datetime, timezone
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(
+                "SELECT expires_at FROM premium_users WHERE telegram_id = $1", user_id
+            )
+            if not row:
+                return False
+            return row['expires_at'] > datetime.now(timezone.utc)
+
+    async def get_premium_info(self, user_id: int):
+        async with self.pool.acquire() as connection:
+            return await connection.fetchrow(
+                "SELECT * FROM premium_users WHERE telegram_id = $1", user_id
+            )
+
+    async def activate_premium(self, user_id: int, activated_by: int, days: int = 30):
+        from datetime import datetime, timezone, timedelta
+        expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+        async with self.pool.acquire() as connection:
+            await connection.execute("""
+                INSERT INTO premium_users (telegram_id, activated_by, expires_at)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (telegram_id) DO UPDATE
+                SET expires_at = EXCLUDED.expires_at, activated_by = EXCLUDED.activated_by
+            """, user_id, activated_by, expires_at)
+
+    async def remove_premium(self, user_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute("DELETE FROM premium_users WHERE telegram_id = $1", user_id)
+
+    # ─── MESSAGING METHODS ──────────────────────────────────────────────────────
+
+    async def log_teacher_message(self, user_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "INSERT INTO message_logs (user_id, sent_at) VALUES ($1, NOW())", user_id
+            )
+
+    async def can_send_teacher_message_premium(self, user_id: int) -> bool:
+        from datetime import date
+        async with self.pool.acquire() as connection:
+            count = await connection.fetchval(
+                "SELECT COUNT(*) FROM message_logs WHERE user_id = $1 AND DATE(sent_at) = $2",
+                user_id, date.today()
+            )
+            return count < 10
+
+    # ─── BLOCK/UNBLOCK METHODS ──────────────────────────────────────────────────
+
+    async def block_user(self, user_id: int, reason: str, days: int = 30):
+        from datetime import datetime, timezone, timedelta
+        blocked_until = datetime.now(timezone.utc) + timedelta(days=days)
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE users SET is_blocked = TRUE, blocked_until = $2, block_reason = $3 WHERE telegram_id = $1",
+                user_id, blocked_until, reason
+            )
+
+    async def unblock_user(self, user_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE users SET is_blocked = FALSE, blocked_until = NULL, block_reason = NULL WHERE telegram_id = $1",
+                user_id
+            )
+
+    # ─── TEACHER BIO / FEE ──────────────────────────────────────────────────────
+
+    async def set_teacher_bio(self, user_id: int, bio: str):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE users SET teacher_bio = $2 WHERE telegram_id = $1", user_id, bio
+            )
+
+    async def set_group_monthly_fee(self, group_id: int, fee: int, deadline: str, comment: str = None):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE groups SET monthly_fee = $2, fee_deadline = $3, fee_comment = $4 WHERE id = $1",
+                group_id, fee, deadline, comment
+            )
+
+    # ─── GROUPS WITH STATS ──────────────────────────────────────────────────────
+
+    async def get_all_groups_with_stats(self):
+        async with self.pool.acquire() as connection:
+            groups = await connection.fetch(
+                "SELECT id, name, days, time, group_level, teacher_id, monthly_fee, fee_deadline, fee_comment FROM groups ORDER BY id ASC"
+            )
+            result = []
+            for g in groups:
+                count = await connection.fetchval(
+                    "SELECT COUNT(*) FROM users WHERE group_id = $1 AND status = 'active'", g['id']
+                )
+                result.append(dict(g) | {'student_count': count or 0})
+            return result
+
+    async def get_group_students_with_scores(self, group_id: int):
+        async with self.pool.acquire() as connection:
+            students = await connection.fetch(
+                "SELECT telegram_id, first_name, last_name, student_level FROM users WHERE group_id = $1 AND status = 'active'",
+                group_id
+            )
+            result = []
+            for s in students:
+                uid = s['telegram_id']
+                scores = await connection.fetch(
+                    "SELECT score FROM scores WHERE user_id = $1 ORDER BY id DESC LIMIT 6", uid
+                )
+                total = sum(r['score'] for r in scores)
+                result.append(dict(s) | {'current_score': total, 'lesson_count': len(scores)})
+            return result
+
+    async def get_group_top_students(self, group_id: int, limit: int = 3):
+        students = await self.get_group_students_with_scores(group_id)
+        students.sort(key=lambda x: x['current_score'], reverse=True)
+        return students[:limit]
+
+    # ─── REFERRAL METHODS ───────────────────────────────────────────────────────
+
+    async def get_or_create_referral_code(self, user_id: int) -> str:
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(
+                "SELECT referral_code FROM users WHERE telegram_id = $1", user_id
+            )
+            if row and row['referral_code']:
+                return row['referral_code']
+            code = f"ref{user_id}"
+            await connection.execute(
+                "UPDATE users SET referral_code = $2 WHERE telegram_id = $1", user_id, code
+            )
+            return code
+
+    async def record_referral(self, referral_code: str, new_user_id: int):
+        async with self.pool.acquire() as connection:
+            owner = await connection.fetchrow(
+                "SELECT telegram_id FROM users WHERE referral_code = $1", referral_code
+            )
+            if owner:
+                await connection.execute(
+                    "INSERT INTO referrals (owner_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    owner['telegram_id'], new_user_id
+                )
+
+    async def mark_referral_staying(self, user_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE referrals SET is_staying = TRUE WHERE referred_id = $1", user_id
+            )
+
+    async def get_staying_referral_count(self, owner_id: int) -> int:
+        async with self.pool.acquire() as connection:
+            return await connection.fetchval(
+                "SELECT COUNT(*) FROM referrals WHERE owner_id = $1 AND is_staying = TRUE", owner_id
+            ) or 0
+
+    async def get_referral_stats(self, user_id: int) -> dict:
+        async with self.pool.acquire() as connection:
+            total = await connection.fetchval(
+                "SELECT COUNT(*) FROM referrals WHERE owner_id = $1", user_id
+            ) or 0
+            staying = await connection.fetchval(
+                "SELECT COUNT(*) FROM referrals WHERE owner_id = $1 AND is_staying = TRUE", user_id
+            ) or 0
+            return {'total': total, 'staying': staying}
+
+    # ─── PREMIUM REQUESTS ───────────────────────────────────────────────────────
+
+    async def create_premium_request(self, user_id: int, amount: int, comment: str, photo_id: str) -> int:
+        async with self.pool.acquire() as connection:
+            return await connection.fetchval(
+                "INSERT INTO premium_requests (user_id, amount, comment, photo_id, status) VALUES ($1, $2, $3, $4, 'pending') RETURNING id",
+                user_id, amount, comment, photo_id
+            )
+
+    async def update_premium_request_status(self, request_id: int, status: str):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE premium_requests SET status = $2 WHERE id = $1", request_id, status
+            )
+
+    async def get_user_premium_attempt_count(self, user_id: int) -> int:
+        from datetime import date
+        async with self.pool.acquire() as connection:
+            return await connection.fetchval(
+                "SELECT COUNT(*) FROM premium_requests WHERE user_id = $1 AND DATE(created_at) = $2",
+                user_id, date.today()
+            ) or 0
+
+    # ─── AI CHAT METHODS ────────────────────────────────────────────────────────
+
+    async def add_ai_chat_message(self, user_id: int, role: str, content: str):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "INSERT INTO ai_chat_history (user_id, role, content, created_at) VALUES ($1, $2, $3, NOW())",
+                user_id, role, content
+            )
+
+    async def get_ai_chat_history(self, user_id: int, limit: int = 20):
+        async with self.pool.acquire() as connection:
+            return await connection.fetch(
+                "SELECT role, content FROM ai_chat_history WHERE user_id = $1 ORDER BY id DESC LIMIT $2",
+                user_id, limit
+            )
+
+    async def clear_ai_chat_history(self, user_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "DELETE FROM ai_chat_history WHERE user_id = $1", user_id
+            )
+
+    # ─── GROWTH STATS ───────────────────────────────────────────────────────────
+
+    async def get_my_growth_stats(self, user_id: int) -> dict:
+        async with self.pool.acquire() as connection:
+            cycles = await connection.fetch(
+                "SELECT cycle_number, total_score, level, attendance_count FROM cycles WHERE user_id = $1 ORDER BY cycle_number ASC",
+                user_id
+            )
+            att_total = await connection.fetchval(
+                "SELECT COUNT(*) FROM attendance WHERE user_id = $1 AND is_present = TRUE", user_id
+            ) or 0
+            return {'cycles': list(cycles), 'total_attendance': att_total}
