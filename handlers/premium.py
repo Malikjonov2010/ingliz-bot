@@ -157,13 +157,8 @@ async def get_ai_response(user_message: str, history: list) -> str:
                     config={"system_instruction": GEMINI_SYSTEM_PROMPT}
                 )
             )
-            import html
             try:
-                text = response.text
-                text = text.replace("<", "&lt;").replace(">", "&gt;")
-                text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
-                text = re.sub(r'__(.*?)__', r'<u>\1</u>', text, flags=re.DOTALL)
-                return text
+                return response.text
             except ValueError:
                 return "AI tizimi xavfsizlik (safety) qoidalari tufayli bu xabarga javob bera olmadi."
         except Exception as e:
@@ -707,6 +702,8 @@ async def handle_ai_message(message: Message, state: FSMContext, db: Database):
         text = re.sub(r'_([^_\n]+?)_', r'<i>\1</i>', text)
         # `code` -> <code>code</code>
         text = re.sub(r'`([^`]+?)`', r'<code>\1</code>', text)
+        # links [text](url) -> <a href="url">text</a>
+        text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
         # ──  or --- separators keep as is
         return text
 
