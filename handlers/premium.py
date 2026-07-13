@@ -687,16 +687,38 @@ async def handle_ai_message(message: Message, state: FSMContext, db: Database):
         await typing.delete()
     except Exception:
         pass
+
+    # Convert Markdown to Telegram HTML
+    import re, html as html_lib
+
+    def md_to_html(text: str) -> str:
+        # Escape HTML special chars first
+        text = html_lib.escape(text)
+        # ### headings -> <b>...</b>
+        text = re.sub(r'(?m)^#{1,6}\s*(.+)$', r'<b>\1</b>', text)
+        # **bold** -> <b>bold</b>
+        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+        # __bold__ -> <b>bold</b>
+        text = re.sub(r'__(.+?)__', r'<b>\1</b>', text)
+        # *italic* or _italic_ -> <i>...</i>
+        text = re.sub(r'\*([^*\n]+?)\*', r'<i>\1</i>', text)
+        text = re.sub(r'_([^_\n]+?)_', r'<i>\1</i>', text)
+        # `code` -> <code>code</code>
+        text = re.sub(r'`([^`]+?)`', r'<code>\1</code>', text)
+        # ──  or --- separators keep as is
+        return text
+
+    html_response = md_to_html(response_text)
+
     try:
-        if len(response_text) > 3800:
-            for i in range(0, len(response_text), 3800):
-                await message.answer(f"🤖 <b>AI Ustoz:</b>\n\n{response_text[i:i+3800]}", parse_mode="HTML")
+        if len(html_response) > 3800:
+            for i in range(0, len(html_response), 3800):
+                await message.answer(f"🤖 <b>AI Ustoz:</b>\n\n{html_response[i:i+3800]}", parse_mode="HTML")
         else:
-            await message.answer(f"🤖 <b>AI Ustoz:</b>\n\n{response_text}", parse_mode="HTML")
+            await message.answer(f"🤖 <b>AI Ustoz:</b>\n\n{html_response}", parse_mode="HTML")
     except Exception as e:
         logger.error(f"Xabar yuborishda xatolik: {e}")
         try:
-            # Agar HTML parse xatosi bo'lsa, oddiy text formatda yuboramiz
             await message.answer(f"🤖 AI Ustoz:\n\n{response_text[:4000]}")
         except Exception:
             await message.answer("❌ AI javobini yuborishda xatolik yuz berdi.")
@@ -804,17 +826,14 @@ async def show_my_growth(callback: CallbackQuery, db: Database):
         return
 
     stats = await db.get_my_growth_stats(callback.from_user.id)
-    cycles = stats["cycles"]
+    cycles = stats.get("cycles", [])
+    total_attendance = stats.get("total_attendance", 0)
 
     text = (
         f"📈 <b>Mening o'sish tahlilim</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🎓 <b>Davomat:</b> {stats['total_attended']}/{stats['total_lessons']} dars "
-        f"({stats['attendance_pct']}%)\n"
-        f"📊 <b>O'rtacha ball:</b> {stats['avg_score']}/25\n"
+        f"🎓 <b>Jami davomatlar:</b> {total_attendance} marta\n"
     )
-    if stats["group_rank"]:
-        text += f"🏅 <b>Guruhingizda:</b> {stats['group_rank']}-o'rin\n"
 
     text += "\n📚 <b>Sikl tarixi:</b>\n"
     if cycles:
@@ -873,7 +892,7 @@ async def show_referral(callback: CallbackQuery, db: Database):
         f"📊 <b>Statistika:</b>\n"
         f"  👥 Jami taklif: <b>{stats['total']}</b> ta\n"
         f"  ✅ Botda qolganlar: <b>{stats['staying']}</b> ta\n"
-        f"  🎁 Mukofot uchun kerak: <b>{stats['needed']}</b> ta\n\n"
+        f"  🎁 Mukofot uchun kerak: <b>{max(0, 10 - stats['staying'])}</b> ta\n\n"
         f"🎁 <b>Qoida:</b> 10 ta do'st ro'yxatdan o'tib botda qolsa — "
         f"<b>+30 kun Premium bepul!</b>\n\n"
         f"<i>Do'stingiz /start bosib ro'yxatdan o'tsa va botda qolsa hisoblanadi.</i>"

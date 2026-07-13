@@ -583,7 +583,7 @@ async def cmd_delete_account(message: Message, state: FSMContext, db: Database):
     await state.set_state(Deletion.waiting_for_reason)
 
 @router.message(F.text == "⬅️ Orqaga", StateFilter(Deletion.waiting_for_reason, Deletion.waiting_for_code))
-async def cancel_deletion(message: Message, state: FSMContext):
+async def cancel_deletion(message: Message, state: FSMContext, db: Database):
     await state.clear()
     await message.answer("❌ Amaliyot bekor qilindi.", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
 

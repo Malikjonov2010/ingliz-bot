@@ -704,32 +704,11 @@ async def process_astud_save_eng_lvl(callback: CallbackQuery, db: Database):
         kb = get_student_profile_keyboard(student_id, back_callback_data=back_cb)
         await callback.message.answer(text, parse_mode="HTML", reply_markup=kb)
 
-@router.callback_query(F.data.startswith("astud_bio:"))
-async def process_astud_bio(callback: CallbackQuery, state: FSMContext):
-    student_id = int(callback.data.split(":")[1])
-    await state.update_data(bio_student_id=student_id)
-    await state.set_state(AdminStudentEdit.waiting_for_bio)
-    
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Bekor qilish", callback_data="cancel_astud_edit")]
-    ])
-    await callback.message.answer("✍️ O'quvchi uchun tafsif (bio/fikr) yozing.\nBu xabar uning o'zlashtirish panelida doimiy turadi:", reply_markup=kb)
-    await callback.answer()
-
-@router.message(AdminStudentEdit.waiting_for_bio)
-async def save_astud_bio(message: Message, state: FSMContext, db: Database):
-    data = await state.get_data()
-    student_id = data.get('bio_student_id')
-    bio = message.text
-    
-    await db.update_teacher_bio(student_id, bio)
-    await message.answer("✅ Ustoz tafsifi muvaffaqiyatli saqlandi!")
-    await state.clear()
-
 @router.callback_query(F.data == "cancel_astud_edit")
 async def cancel_astud_edit(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.delete()
+
 
 from datetime import datetime
 
