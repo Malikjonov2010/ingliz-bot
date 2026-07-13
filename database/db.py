@@ -72,6 +72,10 @@ class Database:
         async with self.pool.acquire() as connection:
             await connection.execute(query, telegram_id, status)
             
+    async def get_active_users(self) -> List[asyncpg.Record]:
+        async with self.pool.acquire() as connection:
+            return await connection.fetch("SELECT * FROM users WHERE status = 'active'")
+
     async def get_all_groups(self) -> List[asyncpg.Record]:
         query = "SELECT id, name, days, time, group_level, teacher_id, monthly_fee, fee_deadline, fee_comment FROM groups ORDER BY id ASC"
         async with self.pool.acquire() as connection:
@@ -150,11 +154,40 @@ class Database:
             
             return lesson_num, total
             
+    async def can_send_teacher_message(self, user_id: int) -> bool:
+        """Odatiy foydalanuvchi uchun kuniga 1 ta limit."""
+        from datetime import date
+        async with self.pool.acquire() as connection:
+            count = await connection.fetchval(
+                "SELECT COUNT(*) FROM message_logs WHERE user_id = $1 AND DATE(sent_at) = $2",
+                user_id, date.today()
+            )
+            return count < 1
+
+
+            if row['is_blocked'] and row['blocked_until']:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                if row['blocked_until'] > now:
+                    return True
+                else:
+                    # Expired
+                    await connection.execute(
+                        "UPDATE users SET is_blocked = FALSE, blocked_until = NULL WHERE telegram_id = $1",
+                        user_id
+                    )
+                    return False
+            return False
+
+
+
+
+            
     async def has_score_today(self, user_id: int) -> bool:
         async with self.pool.acquire() as connection:
             count = await connection.fetchval("SELECT COUNT(*) FROM scores WHERE user_id = $1 AND date = CURRENT_DATE", user_id)
             return count > 0
-            
+
     async def complete_cycle(self, user_id: int, total_score: int) -> tuple[str, str]:
         """Completes a cycle and returns (Badge Name, Emoji)."""
         percentage = (total_score / 150) * 100
@@ -265,3 +298,43 @@ class Database:
             await connection.execute(query, user_id, level)
 
     
+
+
+    async def is_blocked(self, user_id: int) -> bool:
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(
+                "SELECT is_blocked, blocked_until FROM users WHERE telegram_id = $1", 
+                user_id
+            )
+            if not row:
+                return False
+            if row['is_blocked'] and row['blocked_until']:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                if row['blocked_until'] > now:
+                    return True
+                else:
+                    await connection.execute(
+                        "UPDATE users SET is_blocked = FALSE, blocked_until = NULL WHERE telegram_id = $1",
+                        user_id
+                    )
+                    return False
+            return False
+
+    async def get_expired_premium_users(self):
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        async with self.pool.acquire() as connection:
+            return await connection.fetch(
+                "SELECT telegram_id FROM premium_users WHERE expires_at <= $1",
+                now
+            )
+
+    async def get_blocked_users_to_unblock(self):
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        async with self.pool.acquire() as connection:
+            return await connection.fetch(
+                "SELECT telegram_id FROM users WHERE is_blocked = TRUE AND blocked_until <= $1",
+                now
+            )
