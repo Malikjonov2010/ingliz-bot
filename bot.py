@@ -19,7 +19,16 @@ async def main():
 
     # Initialize Database
     db = Database(DATABASE_URL)
-    await db.connect()
+    for attempt in range(5):
+        try:
+            await db.connect()
+            break
+        except Exception as e:
+            logging.error(f"Database connection attempt {attempt+1} failed: {e}")
+            await asyncio.sleep(5)
+    else:
+        logging.error("Failed to connect to the database after 5 attempts.")
+        return
     
     # Uncomment the next line to automatically create tables on startup
     await db.create_tables()
