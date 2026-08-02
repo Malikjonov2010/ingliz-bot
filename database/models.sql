@@ -60,7 +60,8 @@ ALTER TABLE attendance ADD COLUMN IF NOT EXISTS reason TEXT;
 
 DO $$
 BEGIN
-  IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='attendance' AND column_name='student_id') THEN
+  IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='attendance' AND column_name='student_id')
+     AND NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='attendance' AND column_name='user_id') THEN
     ALTER TABLE attendance RENAME COLUMN student_id TO user_id;
   END IF;
 END $$;
