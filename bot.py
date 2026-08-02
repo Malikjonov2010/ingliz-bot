@@ -72,18 +72,21 @@ async def main():
     logging.info("Bot is starting...")
     
     import os
-    port = os.getenv("PORT")
-    if port:
+    port = int(os.getenv("PORT", 10000))
+    try:
         from aiohttp import web
         async def dummy_handler(request):
             return web.Response(text="English Bot is running smoothly!")
         app = web.Application()
         app.router.add_get('/', dummy_handler)
+        app.router.add_get('/health', dummy_handler)
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', int(port))
+        site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
-        logging.info(f"Dummy web server started on port {port} for Render.")
+        logging.info(f"Web server started on port {port} for UptimeRobot / Render.")
+    except Exception as e:
+        logging.warning(f"Could not start web server on port {port}: {e}")
 
     try:
         from scheduler import start_scheduler
