@@ -739,7 +739,7 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
 @router.message(F.text == "🤖 Bot qoidalari va foydalanish", StateFilter(None))
 async def show_student_rules(message: Message):
     from rules.studentrule import STUDENT_RULES_TEXT
-    await message.answer(STUDENT_RULES_TEXT, parse_mode="Markdown")
+    await message.answer(STUDENT_RULES_TEXT, parse_mode="HTML")
 
 @router.message()
 async def catch_all_messages(message: Message, state: FSMContext, db: Database):
