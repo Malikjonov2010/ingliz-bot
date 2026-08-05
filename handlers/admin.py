@@ -179,7 +179,8 @@ async def confirm_broadcast(callback: CallbackQuery, state: FSMContext, db: Data
     from_chat_id = data.get("from_chat_id")
     msg_id = data.get("message_id")
     
-    users = await db.get_active_users()
+    all_users = await db.get_active_users()
+    users = [u for u in all_users if u['telegram_id'] not in ADMIN_IDS]
     bot = callback.bot
     
     await callback.message.delete()
