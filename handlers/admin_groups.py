@@ -543,7 +543,16 @@ async def astud_msg(callback: CallbackQuery, state: FSMContext):
     keyboard = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="⬅️ Orqaga")]], resize_keyboard=True)
     await callback.message.delete()
     await callback.message.answer(
-        "📩 <b>O'quvchiga yuboriladigan xabarni kiriting:</b>\n(Bekor qilish uchun '⬅️ Orqaga' ni bosing)",
+        "📩 <b>O'quvchiga yuboriladigan xabarni yuboring:</b>\n\n"
+        "<i>Istalgan formatda yuborishingiz mumkin:</i>\n"
+        "• ✍️ Oddiy matn\n"
+        "• 🖼 Rasm\n"
+        "• 🎬 Video\n"
+        "• 📑 PDF / Hujjat\n"
+        "• 🎙 Ovozli xabar\n"
+        "• 📹 Dumaloq video\n"
+        "• 🎵 Audio\n\n"
+        "<i>(Bekor qilish uchun '⬅️ Orqaga' ni bosing)</i>",
         parse_mode="HTML", reply_markup=keyboard
     )
     await state.set_state(AdminPersonalMessage.waiting_for_message)
@@ -553,25 +562,40 @@ async def astud_msg(callback: CallbackQuery, state: FSMContext):
 async def process_admin_personal_message(message: Message, state: FSMContext, db: Database):
     if message.text == "⬅️ Orqaga":
         await state.clear()
-        from handlers.student import get_user_keyboard
-        await message.answer("Amal bekor qilindi.", reply_markup=get_user_keyboard(message.from_user.id))
+        from handlers.student import get_async_user_keyboard
+        kb = await get_async_user_keyboard(message.from_user.id, db)
+        await message.answer("Amal bekor qilindi.", reply_markup=kb)
         return
 
-    data    = await state.get_data()
+    data = await state.get_data()
     stud_id = data.get("student_id")
 
-    import html
-    safe_text = html.escape(message.text)
+    has_media = bool(
+        message.photo or message.video or message.audio or 
+        message.document or message.voice or message.video_note or 
+        message.animation or message.sticker
+    )
+
     try:
-        await message.bot.send_message(
-            chat_id=stud_id,
-            text=f"👨‍🏫 <b>Ustozdan shaxsiy xabar:</b>\n\n{safe_text}",
-            parse_mode="HTML"
-        )
+        if has_media:
+            await message.bot.send_message(
+                chat_id=stud_id,
+                text="👨‍🏫 <b>Ustozdan shaxsiy xabar:</b>",
+                parse_mode="HTML"
+            )
+            await message.copy_to(chat_id=stud_id)
+        else:
+            import html
+            safe_text = html.escape(message.text or "")
+            await message.bot.send_message(
+                chat_id=stud_id,
+                text=f"👨‍🏫 <b>Ustozdan shaxsiy xabar:</b>\n\n{safe_text}",
+                parse_mode="HTML"
+            )
         await state.clear()
-        from handlers.student import get_user_keyboard
-        await message.answer("✅ Xabar o'quvchiga muvaffaqiyatli yuborildi!",
-                             reply_markup=get_user_keyboard(message.from_user.id))
+        from handlers.student import get_async_user_keyboard
+        kb = await get_async_user_keyboard(message.from_user.id, db)
+        await message.answer("✅ Xabar o'quvchiga muvaffaqiyatli yetkazildi!", reply_markup=kb)
     except Exception as e:
         await message.answer(f"❌ Xabar yuborishda xatolik: {e}")
 

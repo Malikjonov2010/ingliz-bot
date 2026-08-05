@@ -78,6 +78,33 @@ async def admin_panel(message: Message, db: Database):
 
 
 # ================= BROADCAST =================
+@router.callback_query(F.data == "admin_broadcast")
+async def start_broadcast_callback(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+    await callback.answer()
+    from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
+        resize_keyboard=True
+    )
+    await callback.message.answer(
+        "📢 <b>Barcha faol o'quvchilarga yuboriladigan e'lon/xabarni yuboring:</b>\n\n"
+        "<i>Siz istalgan formatda yuborishingiz mumkin:</i>\n"
+        "• ✍️ Oddiy matn (text)\n"
+        "• 🖼 Rasm (photo)\n"
+        "• 🎬 Video\n"
+        "• 📑 PDF / Hujjat (document)\n"
+        "• 🎙 Ovozli xabar (voice)\n"
+        "• 📹 Dumaloq video (video note)\n"
+        "• 🎵 Audio / Musiqa (audio)\n"
+        "• 🎭 GIF / Stiker\n\n"
+        "<i>(Bekor qilish uchun '⬅️ Orqaga' tugmasini bosing)</i>",
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+    await state.set_state(AdminBroadcast.waiting_for_message)
+
 @router.message(F.text == "📢 Hammaga xabar yuborish", StateFilter(None))
 async def start_broadcast(message: Message, state: FSMContext):
     if message.from_user.id not in ADMIN_IDS:
@@ -87,69 +114,109 @@ async def start_broadcast(message: Message, state: FSMContext):
         keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
         resize_keyboard=True
     )
-    await message.answer("📢 Barcha faol o'quvchilarga yuboriladigan xabarni kiriting:", reply_markup=keyboard)
+    await message.answer(
+        "📢 <b>Barcha faol o'quvchilarga yuboriladigan e'lon/xabarni yuboring:</b>\n\n"
+        "<i>Siz istalgan formatda yuborishingiz mumkin:</i>\n"
+        "• ✍️ Oddiy matn (text)\n"
+        "• 🖼 Rasm (photo)\n"
+        "• 🎬 Video\n"
+        "• 📑 PDF / Hujjat (document)\n"
+        "• 🎙 Ovozli xabar (voice)\n"
+        "• 📹 Dumaloq video (video note)\n"
+        "• 🎵 Audio / Musiqa (audio)\n"
+        "• 🎭 GIF / Stiker\n\n"
+        "<i>(Bekor qilish uchun '⬅️ Orqaga' tugmasini bosing)</i>",
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
     await state.set_state(AdminBroadcast.waiting_for_message)
 
 @router.message(AdminBroadcast.waiting_for_message)
-async def process_broadcast(message: Message, state: FSMContext):
-    text_to_send = message.text
-    if text_to_send == "⬅️ Orqaga":
+async def process_broadcast(message: Message, state: FSMContext, db: Database):
+    if message.text == "⬅️ Orqaga":
         await state.clear()
-        from handlers.student import get_user_keyboard
-        await message.answer("Bosh menyuga qaytdingiz.", reply_markup=get_user_keyboard(message.from_user.id))
+        from handlers.student import get_async_user_keyboard
+        kb = await get_async_user_keyboard(message.from_user.id, db)
+        await message.answer("Bosh menyuga qaytdingiz.", reply_markup=kb)
         return
 
-    await state.update_data(broadcast_msg=text_to_send)
+    # Store from_chat_id and message_id to copy exact message (media, text, captions, entities)
+    await state.update_data(
+        from_chat_id=message.chat.id,
+        message_id=message.message_id
+    )
     
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Ha", callback_data="confirm_broadcast:yes"),
-             InlineKeyboardButton(text="❌ Yo'q", callback_data="confirm_broadcast:no")]
+            [
+                InlineKeyboardButton(text="✅ Ha, barchaga yuborilsin", callback_data="confirm_broadcast:yes"),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="confirm_broadcast:no")
+            ]
         ]
     )
     
-    import html
-    safe_text = html.escape(text_to_send)
-    await message.answer(f"Shu xabarni jo'natishni tasdiqlaysizmi?\n\n<b>Xabar:</b>\n{safe_text}", reply_markup=keyboard, parse_mode="HTML")
+    await message.reply(
+        "👆 <b>Yuqoridagi xabarni barcha faol o'quvchilarga tarqatishni tasdiqlaysizmi?</b>",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
     await state.set_state(AdminBroadcast.waiting_for_confirmation)
 
 @router.callback_query(AdminBroadcast.waiting_for_confirmation, F.data.startswith("confirm_broadcast:"))
 async def confirm_broadcast(callback: CallbackQuery, state: FSMContext, db: Database):
     choice = callback.data.split(":")[1]
+    admin_id = callback.from_user.id
     
     if choice == "no":
         await state.clear()
-        from handlers.student import get_user_keyboard
+        from handlers.student import get_async_user_keyboard
+        kb = await get_async_user_keyboard(admin_id, db)
         await callback.message.delete()
-        await callback.message.answer("❌ Xabar yuborish bekor qilindi.", reply_markup=get_user_keyboard(callback.from_user.id))
+        await callback.message.answer("❌ Xabar yuborish bekor qilindi.", reply_markup=kb)
         return
         
     data = await state.get_data()
-    text_to_send = data.get("broadcast_msg")
+    from_chat_id = data.get("from_chat_id")
+    msg_id = data.get("message_id")
     
     users = await db.get_active_users()
-    admin_id = callback.from_user.id
+    bot = callback.bot
     
     await callback.message.delete()
-    from handlers.student import get_user_keyboard
-    await callback.message.answer(f"⏳ Xabar {len(users)} ta o'quvchiga fonda yuborilishni boshladi. Botdan bemalol foydalanishingiz mumkin!", reply_markup=get_user_keyboard(admin_id))
+    from handlers.student import get_async_user_keyboard
+    kb = await get_async_user_keyboard(admin_id, db)
+    await callback.message.answer(
+        f"⏳ <b>Xabar {len(users)} ta o'quvchiga fonda tarqatilmoqda...</b>\n"
+        f"Jarayon yakunlangach sizga hisobot yuboriladi.",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
     await state.clear()
     
-    import html
-    safe_text = html.escape(text_to_send)
     import asyncio
     async def run_broadcast():
-        count = 0
+        success_count = 0
+        fail_count = 0
         for u in users:
             try:
-                await callback.bot.send_message(u['telegram_id'], f"📢 <b>Admindan xabar:</b>\n\n{safe_text}", parse_mode="HTML")
-                count += 1
-                await asyncio.sleep(0.05) # Prevent rate limits
+                await bot.copy_message(
+                    chat_id=u['telegram_id'],
+                    from_chat_id=from_chat_id,
+                    message_id=msg_id
+                )
+                success_count += 1
+                await asyncio.sleep(0.04)  # Safe speed: 25 msgs/sec for Telegram API limits
             except Exception:
-                pass
+                fail_count += 1
         
         try:
-            await callback.bot.send_message(admin_id, f"✅ Ommaviy xabar {count} ta o'quvchiga muvaffaqiyatli yetkazildi.")
+            report = (
+                f"📢 <b>Ommaviy xabar muvaffaqiyatli tarqatildi!</b>\n\n"
+                f"👥 <b>Yetkazildi:</b> {success_count} ta o'quvchi\n"
+            )
+            if fail_count > 0:
+                report += f"⚠️ <b>Yetkazilmadi (botni to'xtatganlar):</b> {fail_count} ta o'quvchi"
+            await bot.send_message(admin_id, report, parse_mode="HTML")
         except Exception:
             pass
             

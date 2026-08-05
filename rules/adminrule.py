@@ -8,13 +8,16 @@ Assalomu alaykum, Ustoz! Ushbu qo'llanmada botdagi barcha imkoniyatlar, o'quvchi
 🗂 <b>ADMIN MENYU TUGMALARI VA VAZIFALARI</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1️⃣ <b>📢 Hammaga xabar yuborish (E'lonlar)</b>
-• Botdagi barcha faol o'quvchilarga bir vaqtning o'zida matn, rasm, video yoki fayl yuborish.
-• ⚠️ <i>Eslatma:</i> E'lonlarni faqat muhim holatlarda yuborish tavsiya etiladi.
+1️⃣ <b>📢 Hammaga xabar yuborish (E'lonlar va Materiallar)</b>
+• Botdagi barcha faol o'quvchilarga bir vaqtning o'zida har qanday formatdagi xabarni tarqatish:
+  ✍️ Matn • 🖼 Rasm • 🎬 Video • 📑 PDF / Hujjat • 🎙 Ovozli xabar • 📹 Dumaloq video • 🎵 Audio • 🎭 GIF / Stiker
+• Yuborishdan oldin tasdiqlash menyusi orqali xabarni tekshirib olishingiz mumkin.
+• Xabarlar fonda tez va xavfsiz (Telegram limitlariga mos ravishda) yetkaziladi va yakunida hisobot beriladi.
 
-2️⃣ <b>👥 Guruhlar va O'quvchilar</b>
+2️⃣ <b>👥 Guruhlar va O'quvchilar (Shaxsiy xabarlar)</b>
 • Barcha guruhlar ro'yxatini ko'rish va ulardagi o'quvchilar ro'yxatiga o'tish.
-• O'quvchi profilini ochib: ball qo'yish, darajasini o'zgartirish, Bio (fikr) yozish yoki to'g'ridan-to'g'ri unga shaxsiy xabar yuborish.
+• O'quvchi profilini ochib: ball qo'yish, darajasini o'zgartirish, Bio (fikr) yozish.
+• 📩 <b>O'quvchiga shaxsiy xabar:</b> O'quvchiga to'g'ridan-to'g'ri istalgan formatda (matn, audio, video, ovozli, rasm, PDF) xabar va topshiriq yuborish.
 
 3️⃣ <b>👤 O'quvchilarni ko'rish</b>
 • O'quvchilarni toifalari (SUPPORT 💎, CAPTAIN 👑, MAIN 🎯, LEARNER 📖, INTRODUCTORY 🌱) bo'yicha saralab ko'rish va tahrirlash.
