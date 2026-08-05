@@ -69,10 +69,3 @@ class AdminMonthlyFee(StatesGroup):
 class AdminBlockMsg(StatesGroup):
     waiting_for_message = State()
     target_user_id = State()
-
-class MaterialState(StatesGroup):
-    waiting_for_new_button_name = State()
-    waiting_for_edit_button_name = State()
-    waiting_for_post_content = State()
-
-
