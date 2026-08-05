@@ -125,15 +125,14 @@ async def send_material_item(bot, chat_id: int, post: dict):
 
 
 async def show_node(message: Message, db: Database, state: FSMContext,
-                    node_id: int, user_id: int):
+                    node_id: int, user_id: int, send_posts: bool = False):
     """
-    Joriy tugunni ko'rsatadi:
-    1. Biriktirilgan postlarni yuboradi (agar bo'lsa)
-    2. Pastki navigatsiya klaviaturasini yangilaydi
-    3. FSM holatini yangilaydi
+    Joriy tugunni ko'rsatadi.
+    send_posts=True  → tugma bosilganda (oldinga kirish) → postlar yuboriladi
+    send_posts=False → orqaga/root qaytishda → postlar yuborilmaydi
     """
-    # Postlarni yuborish (faqat o'quvchi yoki tugma-kontentni ko'rish uchun)
-    if node_id != 0:
+    # Postlarni faqat oldinga kirganda yuborish
+    if send_posts and node_id != 0:
         posts = await db.get_material_posts(node_id)
         for post in posts:
             await send_material_item(message.bot, user_id, post)
@@ -150,8 +149,10 @@ async def show_node(message: Message, db: Database, state: FSMContext,
     if children:
         hint = "Kerakli bo'limni tanlang 👇"
     elif node_id != 0:
-        hint = "📥 Materiallar yuborildi." if await db.get_material_posts(node_id) else \
-               "⚠️ Bu bo'limda hali materiallar yo'q."
+        posts_exist = await db.get_material_posts(node_id)
+        hint = "📥 Materiallar yuborildi." if (send_posts and posts_exist) else \
+               ("📌 Bu bo'limda materiallar bor. Kirish uchun bosing." if posts_exist else \
+                "⚠️ Bu bo'limda hali materiallar yo'q.")
     else:
         hint = "Hali bo'limlar yo'q. ➕ Yangi tugma qo'shish orqali boshlang."
 
@@ -190,7 +191,7 @@ async def open_materials_root(message: Message, db: Database, state: FSMContext)
         )
         return
 
-    await show_node(message, db, state, node_id=0, user_id=user_id)
+    await show_node(message, db, state, node_id=0, user_id=user_id, send_posts=False)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -207,7 +208,7 @@ async def mat_close(message: Message, state: FSMContext, db: Database):
 
 @router.message(MatNav.browsing, F.text == "🏠 Bosh sahifa")
 async def mat_go_root(message: Message, state: FSMContext, db: Database):
-    await show_node(message, db, state, node_id=0, user_id=message.from_user.id)
+    await show_node(message, db, state, node_id=0, user_id=message.from_user.id, send_posts=False)
 
 
 @router.message(MatNav.browsing, F.text == "🔙 Orqaga")
@@ -219,7 +220,7 @@ async def mat_go_back(message: Message, state: FSMContext, db: Database):
         return
     node      = await db.get_material_node(cur_id)
     parent_id = node['parent_id'] if (node and node.get('parent_id')) else 0
-    await show_node(message, db, state, node_id=parent_id, user_id=message.from_user.id)
+    await show_node(message, db, state, node_id=parent_id, user_id=message.from_user.id, send_posts=False)
 
 
 # ── Admin: yangi tugma qo'shish ────────────────────────────
@@ -333,7 +334,7 @@ async def mat_child_pressed(message: Message, state: FSMContext, db: Database):
         return
 
     # ── FOYDALANUVCHI: to'g'ridan-to'g'ri ochadi ──
-    await show_node(message, db, state, node_id=node_id, user_id=user_id)
+    await show_node(message, db, state, node_id=node_id, user_id=user_id, send_posts=True)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -348,7 +349,7 @@ async def cb_enter_node(callback: CallbackQuery, db: Database, state: FSMContext
     node_id = int(parts[1])
     await callback.message.delete()
     await show_node(callback.message, db, state,
-                    node_id=node_id, user_id=callback.from_user.id)
+                    node_id=node_id, user_id=callback.from_user.id, send_posts=True)
 
 
 # 3-b. Tarkib qo'shish (post)
