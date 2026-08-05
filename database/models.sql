@@ -195,3 +195,28 @@ CREATE INDEX IF NOT EXISTS idx_referrals_owner ON referrals(owner_id);
 
 -- Premium requests: add photo_id column if missing
 ALTER TABLE premium_requests ADD COLUMN IF NOT EXISTS photo_id TEXT;
+
+-- ============================================================
+-- KITOB, MASHQLAR VA JAVOBLAR (DYNAMIC MATERIAL TREE & POSTS)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS material_nodes (
+    id SERIAL PRIMARY KEY,
+    parent_id INTEGER REFERENCES material_nodes(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    order_index INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_material_nodes_parent ON material_nodes(parent_id);
+
+CREATE TABLE IF NOT EXISTS material_posts (
+    id SERIAL PRIMARY KEY,
+    node_id INTEGER REFERENCES material_nodes(id) ON DELETE CASCADE,
+    post_type VARCHAR(50) NOT NULL,
+    file_id TEXT,
+    caption TEXT,
+    order_index INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_material_posts_node ON material_posts(node_id);
+

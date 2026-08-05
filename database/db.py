@@ -368,6 +368,9 @@ class Database:
     # ─── PREMIUM METHODS ────────────────────────────────────────────────────────
 
     async def is_premium(self, user_id: int) -> bool:
+        from config import ADMIN_IDS
+        if user_id in ADMIN_IDS:
+            return True
         from datetime import datetime, timezone
         async with self.pool.acquire() as connection:
             row = await connection.fetchrow(
@@ -589,3 +592,100 @@ class Database:
                 "SELECT COUNT(*) FROM attendance WHERE user_id = $1 AND is_present = TRUE", user_id
             ) or 0
             return {'cycles': list(cycles), 'total_attendance': att_total}
+
+    # ─── MATERIAL TREE & POSTS METHODS ──────────────────────────────────────────
+
+    async def create_material_node(self, parent_id: Optional[int], title: str) -> int:
+        async with self.pool.acquire() as connection:
+            max_order = await connection.fetchval(
+                "SELECT COALESCE(MAX(order_index), 0) FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1",
+                parent_id
+            ) or 0
+            return await connection.fetchval(
+                "INSERT INTO material_nodes (parent_id, title, order_index) VALUES ($1, $2, $3) RETURNING id",
+                parent_id, title.strip(), max_order + 1
+            )
+
+    async def get_material_node(self, node_id: int) -> Optional[dict]:
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(
+                "SELECT * FROM material_nodes WHERE id = $1", node_id
+            )
+            return dict(row) if row else None
+
+    async def get_material_nodes_by_parent(self, parent_id: Optional[int]) -> List[dict]:
+        async with self.pool.acquire() as connection:
+            rows = await connection.fetch(
+                "SELECT * FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
+                parent_id
+            )
+            return [dict(r) for r in rows]
+
+    async def update_material_node_title(self, node_id: int, title: str):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "UPDATE material_nodes SET title = $1 WHERE id = $2",
+                title.strip(), node_id
+            )
+
+    async def delete_material_node(self, node_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "DELETE FROM material_nodes WHERE id = $1", node_id
+            )
+
+    async def get_material_node_breadcrumbs(self, node_id: int) -> List[dict]:
+        breadcrumbs = []
+        curr_id = node_id
+        async with self.pool.acquire() as connection:
+            while curr_id:
+                node = await connection.fetchrow("SELECT id, parent_id, title FROM material_nodes WHERE id = $1", curr_id)
+                if not node:
+                    break
+                breadcrumbs.append(dict(node))
+                curr_id = node['parent_id']
+        breadcrumbs.reverse()
+        return breadcrumbs
+
+    async def add_material_post(self, node_id: int, post_type: str, file_id: Optional[str] = None, caption: Optional[str] = None) -> int:
+        async with self.pool.acquire() as connection:
+            max_order = await connection.fetchval(
+                "SELECT COALESCE(MAX(order_index), 0) FROM material_posts WHERE node_id = $1",
+                node_id
+            ) or 0
+            return await connection.fetchval(
+                """
+                INSERT INTO material_posts (node_id, post_type, file_id, caption, order_index)
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id
+                """,
+                node_id, post_type, file_id, caption, max_order + 1
+            )
+
+    async def get_material_posts(self, node_id: int) -> List[dict]:
+        async with self.pool.acquire() as connection:
+            rows = await connection.fetch(
+                "SELECT * FROM material_posts WHERE node_id = $1 ORDER BY order_index ASC, id ASC",
+                node_id
+            )
+            return [dict(r) for r in rows]
+
+    async def get_material_post(self, post_id: int) -> Optional[dict]:
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(
+                "SELECT * FROM material_posts WHERE id = $1", post_id
+            )
+            return dict(row) if row else None
+
+    async def delete_material_post(self, post_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "DELETE FROM material_posts WHERE id = $1", post_id
+            )
+
+    async def delete_all_material_posts(self, node_id: int):
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                "DELETE FROM material_posts WHERE node_id = $1", node_id
+            )
+

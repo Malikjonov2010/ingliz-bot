@@ -16,6 +16,7 @@ def get_user_keyboard(user_id: int, is_premium: bool = False):
             keyboard=[
                 [KeyboardButton(text="📢 Hammaga xabar yuborish"), KeyboardButton(text="👥 Guruhlar va O'quvchilar")],
                 [KeyboardButton(text="👤 O'quvchilarni ko'rish"), KeyboardButton(text="🏫 Guruhlarni boshqarish")],
+                [KeyboardButton(text="💎 Premium"), KeyboardButton(text="📚 Kitob mashqlar va javoblar")],
                 [KeyboardButton(text="💰 Oylik to'lov"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
             ],
             resize_keyboard=True
@@ -28,8 +29,8 @@ def get_user_keyboard(user_id: int, is_premium: bool = False):
                 [KeyboardButton(text="📈 Darslar o'zlashtirishim"), KeyboardButton(text="📊 Mening Natijalarim")],
                 [KeyboardButton(text="🏆 O'zingizni darajangiz"), KeyboardButton(text="🎓 Sizning guruh darajangiz")],
                 [KeyboardButton(text="💎 Premium"), KeyboardButton(text="📩 Ustozga xabar yuborish")],
-                [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="💰 Oylik to'lov")],
-                [KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
+                [KeyboardButton(text="📚 Kitob mashqlar va javoblar"), KeyboardButton(text="💰 Oylik to'lov")],
+                [KeyboardButton(text="📢 Kanal va guruhlar"), KeyboardButton(text="🤖 Bot qoidalari va foydalanish")]
             ],
             resize_keyboard=True
         )

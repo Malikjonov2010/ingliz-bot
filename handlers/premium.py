@@ -191,24 +191,30 @@ def _grade(scores: list) -> str:
 
 @router.message(F.text == "💎 Premium", StateFilter(None))
 async def show_premium_info(message: Message, db: Database):
-    user = await db.get_user(message.from_user.id)
-    if not user or user["status"] != "active":
-        await message.answer("⚠️ Botdan foydalanish uchun avval ro'yxatdan o'ting.")
-        return
-
-    if await db.is_premium(message.from_user.id):
-        prem = await db.get_premium_info(message.from_user.id)
-        exp = prem["expires_at"]
-        now = datetime.now(timezone.utc)
-        days_left = (exp - now).days
-        hours_left = int((exp - now).seconds / 3600)
+    user_id = message.from_user.id
+    if user_id in ADMIN_IDS or await db.is_premium(user_id):
+        prem = await db.get_premium_info(user_id)
+        if prem:
+            exp = prem["expires_at"]
+            now = datetime.now(timezone.utc)
+            days_left = (exp - now).days
+            hours_left = int((exp - now).seconds / 3600)
+            duration_text = f"{days_left} kun {hours_left} soat"
+        else:
+            duration_text = "Cheksiz (Admin VIP 👑)"
+            
         await message.answer(
             f"💎 <b>Siz Premium foydalanuvchisiz!</b>\n\n"
-            f"⏳ <b>Qolgan muddat:</b> {days_left} kun {hours_left} soat\n\n"
+            f"⏳ <b>Qolgan muddat:</b> {duration_text}\n\n"
             f"Quyidagi premium imkoniyatlardan foydalaning 👇",
             parse_mode="HTML",
             reply_markup=premium_panel_kb()
         )
+        return
+
+    user = await db.get_user(user_id)
+    if not user or user["status"] != "active":
+        await message.answer("⚠️ Botdan foydalanish uchun avval ro'yxatdan o'ting.")
         return
 
     text = (
@@ -581,6 +587,19 @@ async def admin_send_msg(message: Message, state: FSMContext):
 @router.callback_query(F.data == "prem_duration")
 async def show_duration(callback: CallbackQuery, db: Database):
     await callback.answer()
+    if callback.from_user.id in ADMIN_IDS:
+        await callback.message.answer(
+            f"💎 <b>Premium ma'lumotlaringiz</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👑 <b>Status:</b> Administrator (Cheksiz VIP)\n"
+            f"⏳ <b>Muddat:</b> Doimiy faol ♾",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Panel", callback_data="prem_back_panel")]
+            ])
+        )
+        return
+
     info = await db.get_premium_info(callback.from_user.id)
     if not info:
         await callback.answer("❌ Premium topilmadi.", show_alert=True)

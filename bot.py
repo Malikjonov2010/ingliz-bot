@@ -40,7 +40,7 @@ async def main():
     # Pass db to handlers via workflow_data (Dependency Injection)
     dp.workflow_data.update({'db': db})
 
-    from handlers import registration, student, admin, admin_groups, subscription
+    from handlers import registration, student, admin, admin_groups, subscription, materials
     from handlers import premium as premium_handler
     
     from middlewares.subscription import SubscriptionMiddleware
@@ -57,6 +57,7 @@ async def main():
     dp.include_router(subscription.router)
     dp.include_router(registration.router)
     dp.include_router(premium_handler.router)
+    dp.include_router(materials.router)
     dp.include_router(admin.router)
     dp.include_router(admin_groups.router)
     dp.include_router(student.router)

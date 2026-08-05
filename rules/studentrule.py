@@ -30,7 +30,7 @@ Bizning rasmiy sahifalarimiz, foydali ma'lumotlar berib boriladigan kanallarimiz
 
 ⚠️ **Umumiy qoidalar:**
 - Botga ortiqcha va keraksiz xabarlar yubormang (spam qilmang).
-- Ustoz sizga qoldirgan har qanday fikr (maslahat yoki ogohlantirish) profilingizda ko'rinib turadi, unga amal qilishga harakat qiling.
+- Ustoz sizga qoldirgan har qanday fikr (maslahat yoki ogohlantirish) profilingizda ko'rin  ib turadi, unga amal qilishga harakat qiling.
 
 *O'qishlaringizda omad tilaymiz! Ingliz tilini biz bilan tez va oson o'rganing!*
 
