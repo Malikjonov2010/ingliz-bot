@@ -155,12 +155,15 @@ class Database:
             return lesson_num, total
             
     async def can_send_teacher_message(self, user_id: int) -> bool:
-        """Odatiy foydalanuvchi uchun kuniga 1 ta limit."""
-        from datetime import date
+        """Odatiy foydalanuvchi uchun kuniga 1 ta limit (Toshkent vaqti bilan)."""
+        import pytz
+        from datetime import datetime
+        tz_uz = pytz.timezone('Asia/Tashkent')
+        today_date = datetime.now(tz_uz).date()
         async with self.pool.acquire() as connection:
             count = await connection.fetchval(
-                "SELECT COUNT(*) FROM message_logs WHERE user_id = $1 AND DATE(sent_at) = $2",
-                user_id, date.today()
+                "SELECT COUNT(*) FROM message_logs WHERE user_id = $1 AND DATE(sent_at AT TIME ZONE 'Asia/Tashkent') = $2",
+                user_id, today_date
             )
             return count < 1
 
@@ -410,11 +413,15 @@ class Database:
             )
 
     async def can_send_teacher_message_premium(self, user_id: int) -> bool:
-        from datetime import date
+        """Premium foydalanuvchi uchun kuniga 10 ta limit (Toshkent vaqti bilan)."""
+        import pytz
+        from datetime import datetime
+        tz_uz = pytz.timezone('Asia/Tashkent')
+        today_date = datetime.now(tz_uz).date()
         async with self.pool.acquire() as connection:
             count = await connection.fetchval(
-                "SELECT COUNT(*) FROM message_logs WHERE user_id = $1 AND DATE(sent_at) = $2",
-                user_id, date.today()
+                "SELECT COUNT(*) FROM message_logs WHERE user_id = $1 AND DATE(sent_at AT TIME ZONE 'Asia/Tashkent') = $2",
+                user_id, today_date
             )
             return count < 10
 

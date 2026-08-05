@@ -1,111 +1,70 @@
 ADMIN_RULES_TEXT = """
-🤖 <b>Admin (Ustoz) uchun — To'liq Boshqaruv Qo'llanmasi</b>
+🤖 <b>Super Teaching Bot — Admin (Ustoz) uchun to'liq boshqaruv qo'llanmasi</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Assalomu alaykum! Siz <b>Super Teaching</b> botining admini sifatida o'quvchilar va guruhlarni to'liq boshqarishingiz mumkin.
+Assalomu alaykum, Ustoz! Ushbu qo'llanmada botdagi barcha imkoniyatlar, o'quvchilarni boshqarish, dars materiallari bazasini yaratish va nazorat qoidalari batafsil bayon etilgan.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🗂 <b>ADMIN MENYU TUGMALARI</b>
+🗂 <b>ADMIN MENYU TUGMALARI VA VAZIFALARI</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1️⃣ <b>📢 Hammaga xabar yuborish</b>
-Botdagi barcha faol o'quvchilarga bir vaqtda xabar yuboradi.
-Matn, rasm, video, hujjat — istalgan formatda yuboring.
-⚠️ Suistimol qilmang: Telegram spamga qarshi chora ko'rishi mumkin.
+1️⃣ <b>📢 Hammaga xabar yuborish (E'lonlar)</b>
+• Botdagi barcha faol o'quvchilarga bir vaqtning o'zida matn, rasm, video yoki fayl yuborish.
+• ⚠️ <i>Eslatma:</i> E'lonlarni faqat muhim holatlarda yuborish tavsiya etiladi.
 
 2️⃣ <b>👥 Guruhlar va O'quvchilar</b>
-O'zingizning guruhlaringizni va ulardagi o'quvchilar ro'yxatini ko'rasiz.
-• Guruhga kirib istalgan o'quvchini tanlang
-• O'quvchi profili ochiladi: ball, daraja, davomati
-• Profil orqali: daraja belgilash, ustoz fikri yozish, to'g'ridan-to'g'ri xabar yuborish
+• Barcha guruhlar ro'yxatini ko'rish va ulardagi o'quvchilar ro'yxatiga o'tish.
+• O'quvchi profilini ochib: ball qo'yish, darajasini o'zgartirish, Bio (fikr) yozish yoki to'g'ridan-to'g'ri unga shaxsiy xabar yuborish.
 
 3️⃣ <b>👤 O'quvchilarni ko'rish</b>
-Barcha o'quvchilarni daraja bo'yicha ko'rasiz:
-• SUPPORT 💎, CAPTAIN 👑, MAIN 🎯, LEARNER 📖 darajalar bo'yicha
-• Har bir o'quvchi profiliga kirib tahrir qilish mumkin
+• O'quvchilarni toifalari (SUPPORT 💎, CAPTAIN 👑, MAIN 🎯, LEARNER 📖, INTRODUCTORY 🌱) bo'yicha saralab ko'rish va tahrirlash.
 
 4️⃣ <b>🏫 Guruhlarni boshqarish</b>
-Yangi guruh ochish va boshqarish:
-• Guruh nomi, dars kunlari va vaqti kiritiladi
-• Oylik to'lov miqdori, muddat va izoh qo'shiladi
-• Guruh darajasi belgilanadi (SMART / MIDDLE / LAZY)
-• ⏰ <b>Avtomatik eslatma:</b> Dars vaqti kelganda bot sizga «Darsni baholang!» deb xabar yuboradi
+• Yangi guruh ochish, dars kunlarini (D.CH.J yoki S.P.SH) va dars soatini kiritish.
+• Guruh oylik to'lov summasi, muddati va guruh toifasini (SMART / MIDDLE / LAZY) sozlash.
+• ⏰ <b>Avtomatik dars eslatmasi:</b> Dars vaqti tugaganda bot sizga «Darsni baholang!» eslatmasini yuboradi.
 
-5️⃣ <b>💎 Premium (Admin VIP)</b>
-Siz admin sifatida barcha Premium imkoniyatlardan cheksiz va bepul foydalanasiz:
-🤖 AI Ustoz suhbati • 📊 Barcha guruhlar statistikasi
-📈 O'quvchilar o'sish tahlili • 💰 Narxlar ro'yxati
-📚 Kitoblar bo'limi • va boshqa barcha Premium funksiyalar
+5️⃣ <b>💎 Premium (Admin VIP imtiyozlari)</b>
+• Ikkala admin ham doimiy <b>VIP Premium</b> maqomiga ega (cheksiz muddat).
+• 🤖 AI Ustoz (Gemini AI) bilan inglizcha suhbatlashish.
+• 📊 Barcha guruhlar statistikasi, o'sish diagrammalari va narxlar paneli.
+• 💳 <b>O'quvchilar to'lovlarini tasdiqlash:</b> O'quvchi Premium uchun to'lov qilib chek tashlaganda, sizga so'rov keladi (✅ Tasdiqlash / ❌ Rad etish / 🚫 Shubhali to'lovchini 30 kunga bloklash).
 
-Premium so'rovlar sizga ham keladi:
-• O'quvchi pul o'tkazsa → sizga chek rasmi + summa keladi
-• ✅ Tasdiqlash yoki ❌ Rad etish tugmalari bilan javob bering
-• 🚫 Shubhali to'lovlarda 30 kunlik blok qo'yish imkoni bor
-
-6️⃣ <b>📚 Kitob mashqlar va javoblar — Admin boshqaruvi</b>
-Bu bo'limda o'quv materiallar daraxti (Menu Builder) joylashgan.
-
-<b>Qanday ishlaydi:</b>
-① Bo'limga kiring → «➕ Yangi tugma qo'shish» bosing
-② Tugma nomini yozing (masalan: Elementary, Grammar, Unit 1)
-③ Yaratilgan tugmani bosing → inline menyu chiqadi:
-   • 📂 Ichiga kirish — ichki bo'limlarga o'tish
-   • 📝 Tarkib qo'shish — o'sha tugmani bossalar nima chiqishini sozlash
-   • 👁 Ko'rish — biriktirilgan materiallarni oldindan ko'rish
-   • ✏️ Nomini o'zgartirish — tugma nomini tahrirlash
-   • 🗑 O'chirish — tugmani va uning barcha materiallarini o'chirish
-
-<b>Tarkib qo'shish (📝) — qabul qilinadigan formatlar:</b>
-📄 PDF / Hujjat • 🖼 Rasm • 🎬 Video • 🎵 Audio / MP3
-🎙 Ovozli xabar • 📹 Dumaloq video • ✍️ Matn yoki Link
-
-⭐ Bir tugmaga bir nechta fayl biriktirish mumkin.
-O'quvchi shu tugmani bosganida barcha fayllar ketma-ket chiqadi.
+6️⃣ <b>📚 Kitob mashqlar va javoblar — Materiallar konstruktori (Menu Builder)</b>
+• O'quv materiallari (PDF, rasm, video, audio listening, matnlar) katalogini ierarxik daraxt shaklida yaratish:
+  ① «➕ Yangi tugma qo'shish» orqali bo'lim yoki unit yarating (masalan: <i>Elementary → Unit 1 → Exercises</i>).
+  ② Yaratilgan tugmaga bosganda inline boshqaruv paneli chiqadi:
+     • 📂 <b>Ichiga kirish:</b> Tugma ichida yangi ichki tugmalar yaratish.
+     • 📝 <b>Tarkib qo'shish:</b> Shu tugma bosilganda chiqadigan fayllar (PDF, video, audio, rasm, matn).
+     • 👁 <b>Ko'rish:</b> Yuklangan barcha materiallarni oldindan ko'rish.
+     • ✏️ <b>Nomini o'zgartirish:</b> Tugma nomini yangilash.
+     • 🗑 <b>O'chirish:</b> Tugma va uning ichidagi barcha fayllarni o'chirish.
+  ③ O'quvchi (Premium) ushbu tugmani bosganida barcha biriktirilgan materiallar chiroyli va tartibli yuboriladi.
 
 7️⃣ <b>💰 Oylik to'lov</b>
-Har bir guruhning oylik to'lov miqdori, muddati va izohini belgilaysiz yoki yangilaysiz.
+• Guruhlar oylik to'lov narxlari va to'lov rekvizitlarini boshqarish.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👥 <b>O'QUVCHI PROFILIDA NIMA QILISH MUMKIN?</b>
+⚡ <b>O'QUVCHILAR UCHUN QAT'IY QOIDALAR NAZORATI</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-O'quvchi profilini ochgach quyidagi amallarni bajarishingiz mumkin:
+📌 <b>1. Ustozga xabar yuborish cheklovlari:</b>
+• <b>Odatiy o'quvchilar:</b>
+  - Dars kunlari ustozga xabar yubora olmaydi (chunki dars kuni ustoz bilan yuzma-yuz ko'rishadi).
+  - Faqat dars bo'lmagan kunlarda (kuniga <b>faqat 1 marta</b>) yozishi mumkin.
+  - Faqat <b>oddiy matn (text)</b> yuborishi mumkin (media fayllar qabul qilinmaydi).
+  - 6 ta majburiy kanalga a'zo bo'lishi shart.
+• <b>💎 Premium o'quvchilar:</b>
+  - Har kuni (dars kunlarida ham) yozishi mumkin.
+  - Kuniga <b>10 tagacha</b> xabar yubora oladi.
+  - Har qanday format (matn, rasm, video, ovozli, PDF va b.) qabul qilinadi.
+  - Kanal a'zoligi talab qilinmaydi.
 
-• <b>Daraja belgilash:</b> SUPPORT / CAPTAIN / MAIN / LEARNER / INTRODUCTORY
-• <b>O'zlashtirish baholash:</b> Excellent / Good / Weak
-• <b>Ingliz tili darajasi:</b> alohida profil darajasi
-• <b>📝 Ustoz fikri (Bio) yozish:</b> O'quvchi botga kirganida doimo ko'radigan maxsus xabar
-• <b>📩 Xabar yuborish:</b> O'quvchiga to'g'ridan-to'g'ri shaxsiy xabar
-• <b>Ball qo'shish / Davomat tasdiqlash</b>
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏰ <b>AVTOMATIK TIZIMLAR</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-• <b>Dars eslatmasi:</b> Guruh yaratilganda kiritilgan kun va vaqtda avtomatik xabar keladi
-• <b>Premium bildirishnoma:</b> O'quvchi Premium uchun to'lov qilganda sizga darhol keladi
-• <b>Davomat so'rovi:</b> O'quvchilar davomatni bot orqali yuborganda sizga ko'rinadi
-• <b>Bepul Premium so'rovi:</b> 3 sikl davomida Excellent olgan o'quvchi avtomatik so'rov yuboradi
+📌 <b>2. Davomat nazorati:</b>
+• O'quvchilar faqat o'zlarining dars kunlarida davomat belgilay oladilar.
+• O'quvchi "✅ Keldim" tugmasini bosganda sizga tasdiqlash so'rovi boradi (ikkilamchi ishonchli nazorat).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔑 <b>BUYRUQLAR</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-• /start — Botni qayta ishga tushirish
-• /mypremium — Premium ma'lumotlaringiz (Admin VIP ♾)
-• /delete_account — Akkauntni o'chirish (faqat o'quvchilar uchun)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ <b>MUHIM QOIDALAR</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✅ O'quvchi darajalarini muntazam yangilab turing — statistika shunga asoslanadi.
-✅ Oylik to'lov ma'lumotlarini har oy boshida yangilang.
-✅ Hammaga xabar yuborishdan foydalanishni cheklang (oyiga 2-3 marta).
-✅ Premium so'rovlarni tezda ko'rib chiqing — o'quvchi kutib qolmasin.
-✅ Shubhali yoki noto'g'ri to'lovlarda blok funktsiyasidan foydalaning.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>🛡 Bot ishlashida muammo bo'lsa @Malikjonov_s ga murojaat qiling.</i>
+<i>🛡 Tizim bo'yicha taklif va savollar uchun: @Malikjonov_s</i>
 <b>Developer &amp; Admin: @Malikjonov_s</b>
 """

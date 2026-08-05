@@ -49,19 +49,34 @@ async def mark_attendance(message: Message, db: Database):
         await message.answer("⚠️ Sizning hisobingiz faol emas yoki ro'yxatdan o'tmagansiz.")
         return
 
-    # Check if today is a lesson day
-    today_weekday = date.today().weekday()  # 0: Monday, 6: Sunday
-    days_json = user.get('days')
-    if days_json:
-        try:
-            lesson_days = json.loads(days_json)
-            if today_weekday not in lesson_days:
-                await message.answer("⚠️ Siz faqat dars kuningizda davomat belgilay olasiz!", reply_markup=await get_async_user_keyboard(message.from_user.id, db))
-                return
-        except:
-            pass # fallback if not json
+    # Check if today is a lesson day using robust schedule check
+    from utils import is_today_lesson_day, get_days_schedule_info, shorten_days
+    
+    days_data = user.get('days')
+    if user.get('group_id'):
+        group = await db.get_group(user['group_id'])
+        if group and group.get('days'):
+            days_data = group['days']
+    elif user.get('level'):
+        async with db.pool.acquire() as connection:
+            grp = await connection.fetchrow("SELECT days FROM groups WHERE name = $1", user['level'])
+            if grp and grp.get('days'):
+                days_data = grp['days']
 
-    today_date = date.today()
+    if not is_today_lesson_day(days_data):
+        lesson_text, _ = get_days_schedule_info(days_data)
+        await message.answer(
+            f"⚠️ <b>Bugun sizning dars kuningiz emas!</b>\n\n"
+            f"Siz faqat o'z guruhingizning dars kunlarida davomat belgilay olasiz.\n"
+            f"🗓 <b>Sizning dars kunlaringiz:</b> {lesson_text}",
+            parse_mode="HTML",
+            reply_markup=await get_async_user_keyboard(message.from_user.id, db)
+        )
+        return
+
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    today_date = datetime.now(tz_uz).date()
     
     # Check if attendance is already marked for today
     async with db.pool.acquire() as connection:
@@ -72,7 +87,7 @@ async def mark_attendance(message: Message, db: Database):
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📅 Davomat tarixi", callback_data="attendance_history")]
         ])
-        await message.answer(f"❌ Siz bugun davomatdan o'tgansiz!\nHolat: **{status_str}**", parse_mode="Markdown", reply_markup=kb)
+        await message.answer(f"❌ Siz bugun davomatdan o'tgansiz!\nHolat: <b>{status_str}</b>", parse_mode="HTML", reply_markup=kb)
         return
 
     # Show options
@@ -85,13 +100,42 @@ async def mark_attendance(message: Message, db: Database):
             ]
         ]
     )
-    await message.answer("🏫 **Bugungi darsda ishtirok etdingizmi?**", parse_mode="Markdown", reply_markup=keyboard)
+    await message.answer("🏫 <b>Bugungi darsda ishtirok etdingizmi?</b>\n\nIltimos, haqiqiy holatni belgilang:", parse_mode="HTML", reply_markup=keyboard)
 
 @router.callback_query(F.data == "attendance_present")
 async def process_attendance_present(callback: CallbackQuery, db: Database):
     await callback.answer()
     user_id = callback.from_user.id
-    today_date = date.today()
+    user = await db.get_user(user_id)
+    if not user:
+        return
+        
+    from utils import is_today_lesson_day, get_days_schedule_info, shorten_days, notify_admins_async
+    
+    days_data = user.get('days')
+    if user.get('group_id'):
+        group = await db.get_group(user['group_id'])
+        if group and group.get('days'):
+            days_data = group['days']
+    elif user.get('level'):
+        async with db.pool.acquire() as connection:
+            grp = await connection.fetchrow("SELECT days FROM groups WHERE name = $1", user['level'])
+            if grp and grp.get('days'):
+                days_data = grp['days']
+
+    # 2-sided lesson day verification
+    if not is_today_lesson_day(days_data):
+        await callback.message.delete()
+        lesson_text, _ = get_days_schedule_info(days_data)
+        await callback.message.answer(
+            f"⚠️ <b>Bugun sizning dars kuningiz emas!</b>\n🗓 <b>Dars kunlaringiz:</b> {lesson_text}",
+            parse_mode="HTML"
+        )
+        return
+        
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    today_date = datetime.now(tz_uz).date()
     
     async with db.pool.acquire() as connection:
         exists = await connection.fetchval("SELECT 1 FROM attendance WHERE user_id = $1 AND date = $2", user_id, today_date)
@@ -101,45 +145,67 @@ async def process_attendance_present(callback: CallbackQuery, db: Database):
         await callback.message.answer("⚠️ Siz bugun davomatdan o'tib bo'lgansiz!")
         return
         
-    import pytz
-    tz_uz = pytz.timezone('Asia/Tashkent')
     current_time = datetime.now(tz_uz).strftime("%Y-%m-%d %H:%M")
     today_str = today_date.strftime("%Y-%m-%d")
     
-    await callback.message.edit_text(f"⏳ So'rovingiz ustozga yuborildi.\n📅 Vaqt: {current_time}\nTasdiqlanishini kuting.")
+    await callback.message.edit_text(f"⏳ <b>So'rovingiz ustozga yuborildi.</b>\n📅 Vaqt: {current_time}\nUstoz tasdiqlashini kuting.", parse_mode="HTML")
     
-    user = await db.get_user(user_id)
-    if user:
-        from utils import shorten_days
-        short_d = shorten_days(user.get('days'))
-        
-        profile_url = f"tg://user?id={user_id}"
-        admin_text = (
-            f"🙋‍♂️ **Davomat so'rovi (Keldi)**\n\n"
-            f"👤 **O'quvchi:** [{user['first_name']} {user['last_name']}]({profile_url})\n"
-            f"📞 **Raqam:** +{str(user['phone_number']).lstrip('+')}\n"
-            f"🆔 **ID:** `{user_id}`\n"
-            f"📚 **Guruh (Kurs):** {user['level'] or 'Belgilanmagan'}\n"
-            f"🗓 **Kunlar:** {short_d}\n"
-            f"📅 **Vaqt:** {current_time}\n"
-            f"Siz ushbu o'quvchining kelganini tasdiqlaysizmi?"
-        )
-        
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"att_appr:{user_id}:{today_str}"),
-                InlineKeyboardButton(text="❌ Rad etish", callback_data=f"att_rej:{user_id}:{today_str}")
-            ]
-        ])
-                     
-        from utils import notify_admins_async
-        await notify_admins_async(callback.bot, admin_text, ADMIN_IDS, reply_markup=kb)
+    short_d = shorten_days(days_data)
+    profile_url = f"tg://user?id={user_id}"
+    admin_text = (
+        f"🙋‍♂️ <b>Davomat so'rovi (Keldi)</b>\n\n"
+        f"👤 <b>O'quvchi:</b> <a href='{profile_url}'>{user['first_name']} {user['last_name']}</a>\n"
+        f"📞 <b>Raqam:</b> +{str(user['phone_number']).lstrip('+')}\n"
+        f"🆔 <b>ID:</b> <code>{user_id}</code>\n"
+        f"📚 <b>Guruh (Kurs):</b> {user['level'] or 'Belgilanmagan'}\n"
+        f"🗓 <b>Kunlar:</b> {short_d}\n"
+        f"📅 <b>Vaqt:</b> {current_time}\n\n"
+        f"Siz ushbu o'quvchining kelganini tasdiqlaysizmi?"
+    )
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Tasdiqlash", callback_data=f"att_appr:{user_id}:{today_str}"),
+            InlineKeyboardButton(text="❌ Rad etish", callback_data=f"att_rej:{user_id}:{today_str}")
+        ]
+    ])
+                 
+    await notify_admins_async(callback.bot, admin_text, ADMIN_IDS, parse_mode="HTML", reply_markup=kb)
 
 @router.callback_query(F.data == "attendance_absent")
 async def process_attendance_absent(callback: CallbackQuery, state: FSMContext, db: Database):
     await callback.answer()
     user_id = callback.from_user.id
-    today_date = date.today()
+    user = await db.get_user(user_id)
+    if not user:
+        return
+        
+    from utils import is_today_lesson_day, get_days_schedule_info
+    
+    days_data = user.get('days')
+    if user.get('group_id'):
+        group = await db.get_group(user['group_id'])
+        if group and group.get('days'):
+            days_data = group['days']
+    elif user.get('level'):
+        async with db.pool.acquire() as connection:
+            grp = await connection.fetchrow("SELECT days FROM groups WHERE name = $1", user['level'])
+            if grp and grp.get('days'):
+                days_data = grp['days']
+
+    # 2-sided lesson day verification
+    if not is_today_lesson_day(days_data):
+        await callback.message.delete()
+        lesson_text, _ = get_days_schedule_info(days_data)
+        await callback.message.answer(
+            f"⚠️ <b>Bugun sizning dars kuningiz emas!</b>\n🗓 <b>Dars kunlaringiz:</b> {lesson_text}",
+            parse_mode="HTML"
+        )
+        return
+
+    import pytz
+    tz_uz = pytz.timezone('Asia/Tashkent')
+    today_date = datetime.now(tz_uz).date()
     
     async with db.pool.acquire() as connection:
         exists = await connection.fetchval("SELECT 1 FROM attendance WHERE user_id = $1 AND date = $2", user_id, today_date)
@@ -446,36 +512,55 @@ async def show_student_level(message: Message, db: Database):
 @router.message(F.text == "📩 Ustozga xabar yuborish", StateFilter(None))
 async def msg_teacher(message: Message, db: Database, state: FSMContext):
     user_id = message.from_user.id
+    user = await db.get_user(user_id)
+    if not user or user['status'] != 'active':
+        await message.answer("⚠️ Sizning hisobingiz faol emas yoki ro'yxatdan o'tmagansiz.")
+        return
+
     is_premium = await db.is_premium(user_id)
 
     # Limit va Dars kuni tekshiruvi
     if is_premium:
         if not await db.can_send_teacher_message_premium(user_id):
             await message.answer(
-                "🚫 Siz bugun ustozga 10 marta xabar yuborib bo'ldingiz.\n"
-                "💎 Premium limit: kuniga 10 ta xabar.\nErtaga yana urinib ko'ring!"
+                "🚫 <b>Siz bugun ustozga 10 marta xabar yuborib bo'ldingiz.</b>\n\n"
+                "💎 Premium limit: kuniga 10 ta xabar.\nErtaga yana urinib ko'ring!",
+                parse_mode="HTML"
             )
             return
     else:
-        # Odatiy o'quvchi uchun dars kuni yozish mumkin emas
-        from datetime import date
-        import json
-        today_weekday = date.today().weekday()
-        days_json = user.get('days')
-        if days_json:
-            try:
-                lesson_days = json.loads(days_json)
-                if today_weekday in lesson_days:
-                    await message.answer("⚠️ Siz dars kuni ustozga yoza olmaysiz, ustozning o'ziga ayting!")
-                    return
-            except:
-                pass
+        # Odatiy o'quvchi uchun dars kuni yozish qat'iyan man etiladi
+        from utils import is_today_lesson_day, get_days_schedule_info
+        
+        days_data = user.get('days')
+        if user.get('group_id'):
+            group = await db.get_group(user['group_id'])
+            if group and group.get('days'):
+                days_data = group['days']
+        elif user.get('level'):
+            async with db.pool.acquire() as connection:
+                grp = await connection.fetchrow("SELECT days FROM groups WHERE name = $1", user['level'])
+                if grp and grp.get('days'):
+                    days_data = grp['days']
+
+        lesson_text, non_lesson_text = get_days_schedule_info(days_data)
+
+        if is_today_lesson_day(days_data):
+            await message.answer(
+                f"⚠️ <b>Bugun guruhingizning dars kuni!</b>\n\n"
+                f"🗓 <b>Dars kunlaringiz:</b> {lesson_text}\n\n"
+                f"Ustozingiz bilan darsda to'g'ridan-to'g'ri ko'risha olasiz. Shu sababli dars kunlari bot orqali ustozga xabar yuborish imkoni mavjud emas.\n\n"
+                f"Savollaringizni dars bo'lmagan kunlarda (<b>{non_lesson_text}</b>) yuborishingiz mumkin (kuniga 1 ta matnli xabar).\n\n"
+                f"💡 <i>💎 Premium obunachilar esa istalgan kunda (dars kunlarida ham) 10 tagacha ixtiyoriy formatdagi xabar (fayl, ovozli, rasm, video) yubora oladilar.</i>",
+                parse_mode="HTML"
+            )
+            return
                 
         if not await db.can_send_teacher_message(user_id):
             await message.answer(
-                "🚫 Kechirasiz, siz bugun ustozga xabar yuborish limitini (1 ta) tugatdingiz.\n"
+                "🚫 <b>Kechirasiz, siz bugun ustozga xabar yuborish limitidan (1 ta) foydalanib bo'ldingiz.</b>\n\n"
                 "Ertaga yana urinib ko'ring!\n\n"
-                "💡 <b>Premium</b> obuna bilan kuniga 10 ta ixtiyoriy xabar (ovozli, rasm, fayl) va kanalga obunasiz yuborish mumkin!",
+                "💡 <b>💎 Premium</b> obuna bilan har kuni (dars kunlarida ham) 10 tagacha istalgan formatda (ovozli, rasm, video, PDF) xabar yuborish mumkin!",
                 parse_mode="HTML"
             )
             return
@@ -490,8 +575,8 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
             resize_keyboard=True
         )
         await message.answer(
-            "📝 Ustozga nima demoqchisiz, yozing:\n"
-            "<i>💎 Premium: kanal obunasisiz yuborish mumkin</i>",
+            "📝 <b>Ustozga nima demoqchisiz, yuboring:</b>\n\n"
+            "💎 <i>Premium imtiyoz: matn, rasm, video, audio, ovozli xabar, PDF/fayllar va boshqa barcha formatlar qabul qilinadi.</i>",
             parse_mode="HTML", reply_markup=keyboard
         )
         return
@@ -529,7 +614,12 @@ async def msg_teacher(message: Message, db: Database, state: FSMContext):
             keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
             resize_keyboard=True
         )
-        await message.answer("📝 Ustozga nima demoqchisiz, yozing:", reply_markup=keyboard)
+        await message.answer(
+            "📝 <b>Ustozga matnli xabaringizni yozing:</b>\n\n"
+            "⚠️ <i>Eslatma: Odatiy o'quvchilar faqatgina matnli xabar (text) yubora oladi (kuniga 1 ta). Rasm, video yoki fayllar qabul qilinmaydi.</i>",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
 
 @router.message(F.text == "📢 Kanal va guruhlar", StateFilter(None))
 async def channels_info(message: Message):
@@ -648,6 +738,34 @@ async def process_deletion_code(message: Message, state: FSMContext, db: Databas
 @router.callback_query(F.data == "check_teacher_sub")
 async def process_teacher_sub(callback: CallbackQuery, state: FSMContext, db: Database):
     user_id = callback.from_user.id
+    user = await db.get_user(user_id)
+    if not user or user['status'] != 'active':
+        await callback.answer("⚠️ Hisobingiz faol emas.", show_alert=True)
+        return
+
+    is_premium = await db.is_premium(user_id)
+    if not is_premium:
+        from utils import is_today_lesson_day, get_days_schedule_info
+        days_data = user.get('days')
+        if user.get('group_id'):
+            group = await db.get_group(user['group_id'])
+            if group and group.get('days'):
+                days_data = group['days']
+        elif user.get('level'):
+            async with db.pool.acquire() as connection:
+                grp = await connection.fetchrow("SELECT days FROM groups WHERE name = $1", user['level'])
+                if grp and grp.get('days'):
+                    days_data = grp['days']
+
+        if is_today_lesson_day(days_data):
+            lesson_text, non_lesson_text = get_days_schedule_info(days_data)
+            await callback.answer("⚠️ Bugun guruhingizning dars kuni! Dars kunlari xabar yuborib bo'lmaydi.", show_alert=True)
+            return
+
+        if not await db.can_send_teacher_message(user_id):
+            await callback.answer("🚫 Bugungi limitdan (1 ta xabar) foydalanib bo'ldingiz.", show_alert=True)
+            return
+
     bot = callback.bot
     channels_to_check = [
         "@superteaching",
@@ -678,7 +796,12 @@ async def process_teacher_sub(callback: CallbackQuery, state: FSMContext, db: Da
             keyboard=[[KeyboardButton(text="⬅️ Orqaga")]],
             resize_keyboard=True
         )
-        await callback.message.answer("📝 Ustozga nima demoqchisiz, yozing:", reply_markup=keyboard)
+        await callback.message.answer(
+            "📝 <b>Ustozga matnli xabaringizni yozing:</b>\n\n"
+            "⚠️ <i>Eslatma: Odatiy o'quvchilar faqatgina matnli xabar (text) yubora oladi (kuniga 1 ta).</i>",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
 
 @router.message(TeacherMessage.waiting_for_message)
 async def process_teacher_message(message: Message, state: FSMContext, db: Database):
@@ -693,12 +816,12 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
         return
 
     # Check for media limitation
-    has_media = message.photo or message.video or message.audio or message.document or message.voice
+    has_media = bool(message.photo or message.video or message.audio or message.document or message.voice or message.video_note or message.sticker or message.animation or message.contact or message.location)
     if not is_premium and has_media:
         await message.answer(
-            "⚠️ Odatiy o'quvchilar ustozga faqatgina **matnli xabar (text)** yuborishi mumkin!\n\n"
-            "Agar ovozli xabar, fayl yoki rasm yubormoqchi bo'lsangiz hamda kuniga 10 marta yozishni xohlasangiz **Premium** obuna oling! 💎",
-            parse_mode="Markdown"
+            "⚠️ <b>Odatiy o'quvchilar ustozga faqatgina oddiy matnli xabar (text) yuborishi mumkin!</b>\n\n"
+            "📸 Rasm, 🎬 video, 🎵 audio, 🎙 ovozli xabar, 📑 PDF/hujjatlar yuborish va har kuni 10 tagacha xabar yoza olish uchun <b>💎 Premium</b> obunaga o'ting!",
+            parse_mode="HTML"
         )
         return
 
@@ -707,7 +830,11 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
         return
         
     user = await db.get_user(user_id)
-    name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else message.from_user.full_name
+    if not user:
+        await state.clear()
+        return
+        
+    name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or message.from_user.full_name
     
     await db.log_teacher_message(user_id)
     
@@ -738,8 +865,12 @@ async def process_teacher_message(message: Message, state: FSMContext, db: Datab
 
 @router.message(F.text == "🤖 Bot qoidalari va foydalanish", StateFilter(None))
 async def show_student_rules(message: Message):
-    from rules.studentrule import STUDENT_RULES_TEXT
-    await message.answer(STUDENT_RULES_TEXT, parse_mode="HTML")
+    if message.from_user.id in ADMIN_IDS:
+        from rules.adminrule import ADMIN_RULES_TEXT
+        await message.answer(ADMIN_RULES_TEXT, parse_mode="HTML")
+    else:
+        from rules.studentrule import STUDENT_RULES_TEXT
+        await message.answer(STUDENT_RULES_TEXT, parse_mode="HTML")
 
 @router.message()
 async def catch_all_messages(message: Message, state: FSMContext, db: Database):

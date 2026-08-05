@@ -664,7 +664,7 @@ async def process_admin_delete_code(message: Message, state: FSMContext, db: Dat
         
     await state.clear()
 
-@router.message(F.text == "🤖 Bot qoidalari va foydalanish", lambda message: message.from_user.id in ADMIN_IDS, StateFilter(None))
+@router.message(F.text == "🤖 Bot qoidalari va foydalanish", F.from_user.id.in_(ADMIN_IDS), StateFilter(None))
 async def show_admin_rules(message: Message):
     from rules.adminrule import ADMIN_RULES_TEXT
     await message.answer(ADMIN_RULES_TEXT, parse_mode="HTML")

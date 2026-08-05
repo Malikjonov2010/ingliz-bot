@@ -112,39 +112,118 @@ async def get_student_profile_text_and_keyboard(db, student_id, back_callback_da
     kb = get_student_profile_keyboard(student_id, back_callback_data)
     return text, kb
 
+def parse_lesson_days(days_input) -> list[int]:
+    """
+    Returns a sorted list of integer weekdays (0=Monday, 6=Sunday).
+    Supports JSON arrays, full uzbek names, abbreviations (D.CH.J, S.P.SH), etc.
+    """
+    if not days_input or days_input == "[]":
+        return []
+    
+    import json
+    import re
+    
+    def _map_token(token: str):
+        t = token.strip().lower()
+        mapping = {
+            "dushanba": 0, "dush": 0, "du": 0, "d": 0, "mon": 0, "monday": 0, "0": 0,
+            "seshanba": 1, "sesh": 1, "se": 1, "s": 1, "tue": 1, "tuesday": 1, "1": 1,
+            "chorshanba": 2, "chor": 2, "ch": 2, "wed": 2, "wednesday": 2, "2": 2,
+            "payshanba": 3, "pay": 3, "pa": 3, "p": 3, "thu": 3, "thursday": 3, "3": 3,
+            "juma": 4, "jum": 4, "ju": 4, "j": 4, "fri": 4, "friday": 4, "4": 4,
+            "shanba": 5, "shan": 5, "sh": 5, "sat": 5, "saturday": 5, "5": 5,
+            "yakshanba": 6, "yak": 6, "ya": 6, "y": 6, "sun": 6, "sunday": 6, "6": 6,
+        }
+        return mapping.get(t)
+
+    if isinstance(days_input, list):
+        result = []
+        for item in days_input:
+            if isinstance(item, int) and 0 <= item <= 6:
+                result.append(item)
+            elif isinstance(item, str):
+                w = _map_token(item)
+                if w is not None:
+                    result.append(w)
+        return sorted(list(set(result)))
+        
+    if isinstance(days_input, str):
+        s = days_input.strip()
+        if s.startswith('[') and s.endswith(']'):
+            try:
+                parsed = json.loads(s)
+                return parse_lesson_days(parsed)
+            except Exception:
+                pass
+        
+        tokens = re.split(r'[,;\s/.\-–—()]+', s)
+        result = []
+        for t in tokens:
+            w = _map_token(t)
+            if w is not None:
+                result.append(w)
+        return sorted(list(set(result)))
+        
+    return []
+
+
+def is_today_lesson_day(days_input, target_date=None) -> bool:
+    """
+    Checks if today (in Asia/Tashkent timezone) is among the user's lesson days.
+    """
+    lesson_weekdays = parse_lesson_days(days_input)
+    if not lesson_weekdays:
+        return False
+        
+    if target_date is not None:
+        weekday = target_date.weekday()
+    else:
+        import pytz
+        from datetime import datetime
+        tz_uz = pytz.timezone('Asia/Tashkent')
+        weekday = datetime.now(tz_uz).weekday()
+        
+    return weekday in lesson_weekdays
+
+
+def get_days_schedule_info(days_input) -> tuple[str, str]:
+    """
+    Returns (lesson_days_text, non_lesson_days_text).
+    Example: ("Dushanba, Chorshanba, Juma (D.CH.J)", "Seshanba, Payshanba, Shanba, Yakshanba (S.P.Sh.Y)")
+    """
+    weekdays = parse_lesson_days(days_input)
+    
+    UZ_DAY_NAMES = [
+        "Dushanba", "Seshanba", "Chorshanba",
+        "Payshanba", "Juma", "Shanba", "Yakshanba"
+    ]
+    UZ_SHORT = ["D", "S", "CH", "P", "J", "Sh", "Y"]
+    
+    if not weekdays:
+        return "Noma'lum", "Noma'lum"
+        
+    lesson_names = [UZ_DAY_NAMES[w] for w in weekdays]
+    lesson_short = ".".join([UZ_SHORT[w] for w in weekdays])
+    lesson_text = f"{', '.join(lesson_names)} ({lesson_short})"
+    
+    non_lesson_weekdays = [w for w in range(7) if w not in weekdays]
+    non_lesson_names = [UZ_DAY_NAMES[w] for w in non_lesson_weekdays]
+    non_lesson_short = ".".join([UZ_SHORT[w] for w in non_lesson_weekdays])
+    non_lesson_text = f"{', '.join(non_lesson_names)} ({non_lesson_short})"
+    
+    return lesson_text, non_lesson_text
+
+
 def shorten_days(days_str) -> str:
     if not days_str or days_str == "[]": return ""
-    import json
-    try:
-        if isinstance(days_str, str):
-            if days_str.startswith('['):
-                days_list = json.loads(days_str)
-            else:
-                if ',' in days_str:
-                    days_list = [d.strip() for d in days_str.split(',') if d.strip()]
-                else:
-                    days_list = [d.strip() for d in days_str.split(' ') if d.strip()]
-        elif isinstance(days_str, list):
-            days_list = days_str
-        else:
-            days_list = []
-            
-        short_map = {
-            "dushanba": "D",
-            "seshanba": "S",
-            "chorshanba": "CH",
-            "payshanba": "P",
-            "juma": "J",
-            "shanba": "Sh",
-            "yakshanba": "Y"
-        }
-        if not days_list:
-            return ""
-        res = [short_map.get(d.strip().lower(), d.strip().upper()[:2]) for d in days_list]
-        abbreviations = ".".join(res)
-        return f"Haftada {len(days_list)} kun ({abbreviations})"
-    except Exception:
+    weekdays = parse_lesson_days(days_str)
+    if not weekdays:
         return str(days_str)
+        
+    UZ_SHORT = ["D", "S", "CH", "P", "J", "Sh", "Y"]
+    abbreviations = ".".join([UZ_SHORT[w] for w in weekdays])
+    return f"Haftada {len(weekdays)} kun ({abbreviations})"
+
 
 def sort_groups(groups):
     GROUP_LEVELS_ORDER = {
