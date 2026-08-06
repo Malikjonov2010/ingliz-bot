@@ -204,10 +204,13 @@ CREATE TABLE IF NOT EXISTS material_nodes (
     id SERIAL PRIMARY KEY,
     parent_id INTEGER REFERENCES material_nodes(id) ON DELETE CASCADE,
     title VARCHAR(255) NOT NULL,
+    row_index INTEGER DEFAULT 1,
     order_index INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_material_nodes_parent ON material_nodes(parent_id);
+ALTER TABLE material_nodes ADD COLUMN IF NOT EXISTS row_index INTEGER DEFAULT 1;
+
 
 CREATE TABLE IF NOT EXISTS material_posts (
     id SERIAL PRIMARY KEY,

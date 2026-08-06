@@ -40,7 +40,6 @@ class MatNav(StatesGroup):
     adding_button = State()   # Admin yangi tugma nomi kiritmoqda
     editing_name  = State()   # Admin tugma nomini o'zgartirmoqda
     adding_post   = State()   # Admin fayl/matn yuklayapti
-    setting_pos   = State()   # Admin tugma tartib raqamini kiritmoqda
 
 
 
@@ -57,18 +56,20 @@ async def build_nav_kb(db: Database, node_id: int, user_id: int) -> ReplyKeyboar
     """
     parent_id = None if node_id == 0 else node_id
     children  = await db.get_material_nodes_by_parent(parent_id)
-    cols      = await db.get_material_layout_columns(node_id)
+
+    # Har bir tugma o'zining alohida row_index qatori bo'yicha teriladi
+    rows_dict = {}
+    for ch in children:
+        r_idx = ch.get('row_index') or 1
+        if r_idx not in rows_dict:
+            rows_dict[r_idx] = []
+        rows_dict[r_idx].append(ch)
 
     rows: list = []
-    row:  list = []
-    for ch in children:
-        btn = KeyboardButton(text=f"📂 {ch['title']}")
-        row.append(btn)
-        if len(row) >= cols:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
+    for r_idx in sorted(rows_dict.keys()):
+        row_btns = [KeyboardButton(text=f"📂 {ch['title']}") for ch in rows_dict[r_idx]]
+        if row_btns:
+            rows.append(row_btns)
 
     # Navigatsiya
     if node_id == 0:
@@ -134,22 +135,26 @@ async def render_node_menu(db: Database, node_id: int, cur_id: int):
 
 async def render_move_menu(db: Database, node_id: int, cur_id: int):
     """Admin uchun tugmani tepaga/pastga/chapga/o'ngga surish pulti."""
-    info  = await db.get_material_node_position_info(node_id)
-    title = info['title']
-    pos   = info['pos']
-    total = info['total']
-    cols  = await db.get_material_layout_columns(cur_id)
+    info       = await db.get_material_node_position_info(node_id)
+    title      = info['title']
+    row_no     = info['row']
+    col_no     = info['col']
+    row_len    = info['row_len']
+    total_rows = info['total_rows']
 
     text = (
-        f"🔄 <b>«{html_lib.escape(title)}» joylashuvini o'zgartirish</b>\n"
+        f"🔄 <b>«{html_lib.escape(title)}» joylashuvini boshqarish</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 <b>Hozirgi o'rni:</b> {pos}-o'rinda (Jami: {total} ta)\n"
-        f"📐 <b>Qator tuzilishi:</b> {cols} ta ustun\n\n"
-        f"<i>Tugmani surish uchun quyidagi yo'nalishni bosing:</i>"
+        f"📍 <b>Joylashuvi:</b> {row_no}-qatorda, {col_no}-o'rinda\n"
+        f"📊 <b>Ushbu qatorda:</b> {row_len} ta tugma (Jami: {total_rows} ta qator)\n\n"
+        f"🎮 <b>Harakat yo'nalishlari:</b>\n"
+        f"• ⬆️ <b>Tepaga:</b> Yangi alohida qator qilib tepaga chiqaradi yoki yuqoriga ko'taradi\n"
+        f"• ⬇️ <b>Pastga:</b> Pastki qatorga qo'shadi yoki pastga tushiradi\n"
+        f"• ⬅️ <b>Chapga / ➡️ O'ngga:</b> Qator ichida chapga/o'ngga suradi"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⬆️ Tepaga",
+            InlineKeyboardButton(text="⬆️ Tepaga (Alohida qator / Yuqoriga)",
                                  callback_data=f"mat_move:{node_id}:{cur_id}:up"),
         ],
         [
@@ -159,12 +164,8 @@ async def render_move_menu(db: Database, node_id: int, cur_id: int):
                                  callback_data=f"mat_move:{node_id}:{cur_id}:right"),
         ],
         [
-            InlineKeyboardButton(text="⬇️ Pastga",
+            InlineKeyboardButton(text="⬇️ Pastga (Pastki qatorga qo'shish / Tushirish)",
                                  callback_data=f"mat_move:{node_id}:{cur_id}:down"),
-        ],
-        [
-            InlineKeyboardButton(text="🔢 Tartib raqam kiritish",
-                                 callback_data=f"mat_setpos_start:{node_id}:{cur_id}"),
         ],
         [
             InlineKeyboardButton(text="🔙 Boshqaruv menyusiga qaytish",
@@ -752,75 +753,6 @@ async def cb_move_node(callback: CallbackQuery, db: Database, state: FSMContext)
         await callback.answer(f"⚠️ Bu tugma allaqachon {edge_text} turibdi!", show_alert=True)
 
 
-# 3-i. Aniq tartib raqam kiritish
-@router.callback_query(F.data.startswith("mat_setpos_start:"))
-async def cb_setpos_start(callback: CallbackQuery, state: FSMContext, db: Database):
-    if callback.from_user.id not in ADMIN_IDS:
-        await callback.answer("❌ Ruxsat yo'q.", show_alert=True); return
-
-    parts   = callback.data.split(":")
-    node_id = int(parts[1])
-    cur_id  = int(parts[2])
-
-    info  = await db.get_material_node_position_info(node_id)
-    title = info['title']
-    total = info['total']
-
-    await state.update_data(editing_node_id=node_id, current_node_id=cur_id, total_nodes=total)
-    await state.set_state(MatNav.setting_pos)
-
-    kb = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="⬅️ Bekor qilish")]],
-        resize_keyboard=True
-    )
-    await callback.answer()
-    await callback.message.answer(
-        f"🔢 <b>«{html_lib.escape(title)}» tugmasi tartib raqami</b>\n\n"
-        f"📍 Hozirgi o'rni: <b>{info['pos']}-o'rin</b> (Jami: {total} ta)\n"
-        f"Uni nechanchi o'ringa qo'ymoqchisiz?\n"
-        f"<i>(1 dan {total} gacha son kiriting, masalan: 1 yoki 2)</i>",
-        parse_mode="HTML", reply_markup=kb
-    )
-
-
-@router.message(MatNav.setting_pos)
-async def mat_setpos_process(message: Message, state: FSMContext, db: Database):
-    if message.from_user.id not in ADMIN_IDS:
-        await state.clear(); return
-
-    data    = await state.get_data()
-    node_id = data.get("editing_node_id")
-    cur_id  = data.get("current_node_id", 0)
-    total   = data.get("total_nodes", 1)
-
-    if message.text == "⬅️ Bekor qilish":
-        await state.set_state(MatNav.browsing)
-        kb = await build_nav_kb(db, cur_id, message.from_user.id)
-        await message.answer("❌ Bekor qilindi.", reply_markup=kb)
-        return
-
-    raw_txt = (message.text or "").strip()
-    if not raw_txt.isdigit():
-        await message.answer(f"⚠️ Iltimos, 1 dan {total} gacha butun son kiriting.")
-        return
-
-    pos = int(raw_txt)
-    if pos < 1 or pos > total:
-        await message.answer(f"⚠️ Son 1 dan {total} gacha bo'lishi kerak. Qayta kiriting:")
-        return
-
-    await db.set_material_node_position(node_id, pos)
-    node  = await db.get_material_node(node_id)
-    title = node['title'] if node else "Tugma"
-
-    await state.set_state(MatNav.browsing)
-    kb = await build_nav_kb(db, cur_id, message.from_user.id)
-    await message.answer(
-        f"✅ <b>«{html_lib.escape(title)}»</b> muvaffaqiyatli <b>{pos}-o'ringa</b> qo'yildi va saqlandi!",
-        parse_mode="HTML", reply_markup=kb
-    )
-
-
 # 3-g. Qator ko'rinishi (1, 2, 3 yoki 4 ustun qilib sozlash)
 @router.callback_query(F.data.startswith("mat_cols:"))
 async def cb_set_layout_cols(callback: CallbackQuery, db: Database, state: FSMContext):
@@ -831,7 +763,8 @@ async def cb_set_layout_cols(callback: CallbackQuery, db: Database, state: FSMCo
     cur_id = int(parts[1])
     cols   = int(parts[2])
 
-    await db.set_material_layout_columns(cur_id, cols)
+    parent_id = None if cur_id == 0 else cur_id
+    await db.apply_preset_columns(parent_id, cols)
     await callback.answer(f"✅ Qatorda {cols} tadan qilib sozlandi!", show_alert=False)
 
     try: await callback.message.delete()
@@ -839,7 +772,7 @@ async def cb_set_layout_cols(callback: CallbackQuery, db: Database, state: FSMCo
 
     kb = await build_nav_kb(db, cur_id, callback.from_user.id)
     await callback.message.answer(
-        f"✅ <b>Tugmalar joylashuvi yangilandi:</b> bitta qatorda <b>{cols} tadan</b>.",
+        f"✅ <b>Tugmalar joylashuvi yangilandi:</b> barcha tugmalar bitta qatorda <b>{cols} tadan</b> qilib terildi.",
         parse_mode="HTML", reply_markup=kb
     )
 

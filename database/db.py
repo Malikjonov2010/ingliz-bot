@@ -604,13 +604,28 @@ class Database:
 
     async def create_material_node(self, parent_id: Optional[int], title: str) -> int:
         async with self.pool.acquire() as connection:
-            max_order = await connection.fetchval(
-                "SELECT COALESCE(MAX(order_index), 0) FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1",
+            max_row = await connection.fetchval(
+                "SELECT COALESCE(MAX(row_index), 0) FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1",
                 parent_id
             ) or 0
+            count_last_row = await connection.fetchval(
+                "SELECT COUNT(*) FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 AND row_index = $2",
+                parent_id, max_row
+            ) or 0
+            if max_row == 0 or count_last_row >= 2:
+                target_row = max_row + 1
+                target_order = 10
+            else:
+                target_row = max_row
+                target_order = (count_last_row + 1) * 10
+
             return await connection.fetchval(
-                "INSERT INTO material_nodes (parent_id, title, order_index) VALUES ($1, $2, $3) RETURNING id",
-                parent_id, title.strip(), max_order + 1
+                """
+                INSERT INTO material_nodes (parent_id, title, row_index, order_index)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+                """,
+                parent_id, title.strip(), target_row, target_order
             )
 
     async def get_material_node(self, node_id: int) -> Optional[dict]:
@@ -623,7 +638,11 @@ class Database:
     async def get_material_nodes_by_parent(self, parent_id: Optional[int]) -> List[dict]:
         async with self.pool.acquire() as connection:
             rows = await connection.fetch(
-                "SELECT * FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
+                """
+                SELECT * FROM material_nodes 
+                WHERE parent_id IS NOT DISTINCT FROM $1 
+                ORDER BY COALESCE(row_index, 1) ASC, order_index ASC, id ASC
+                """,
                 parent_id
             )
             return [dict(r) for r in rows]
@@ -641,137 +660,180 @@ class Database:
                 "DELETE FROM material_nodes WHERE id = $1", node_id
             )
 
-    async def get_material_layout_columns(self, parent_id: int) -> int:
-        async with self.pool.acquire() as connection:
-            try:
-                val = await connection.fetchval(
-                    "SELECT columns_count FROM material_layouts WHERE parent_id = $1",
-                    parent_id
-                )
-                return val if val and 1 <= val <= 4 else 2
-            except Exception:
-                return 2
+    async def get_material_grid(self, connection, parent_id: Optional[int]) -> List[List[dict]]:
+        rows = await connection.fetch(
+            """
+            SELECT id, parent_id, title, COALESCE(row_index, 1) as row_index, order_index 
+            FROM material_nodes 
+            WHERE parent_id IS NOT DISTINCT FROM $1 
+            ORDER BY COALESCE(row_index, 1) ASC, order_index ASC, id ASC
+            """,
+            parent_id
+        )
+        if not rows:
+            return []
+        
+        grid_dict = {}
+        for r in rows:
+            r_idx = r['row_index']
+            if r_idx not in grid_dict:
+                grid_dict[r_idx] = []
+            grid_dict[r_idx].append(dict(r))
+        
+        return [grid_dict[k] for k in sorted(grid_dict.keys())]
 
-    async def set_material_layout_columns(self, parent_id: int, columns_count: int) -> None:
-        columns_count = max(1, min(4, columns_count))
-        async with self.pool.acquire() as connection:
-            await connection.execute(
-                """
-                INSERT INTO material_layouts (parent_id, columns_count)
-                VALUES ($1, $2)
-                ON CONFLICT (parent_id) DO UPDATE SET columns_count = EXCLUDED.columns_count
-                """,
-                parent_id, columns_count
-            )
+    async def save_material_grid(self, connection, grid: List[List[dict]]):
+        filtered_grid = [row for row in grid if row]
+        for row_idx, row in enumerate(filtered_grid, 1):
+            for col_idx, item in enumerate(row, 1):
+                await connection.execute(
+                    "UPDATE material_nodes SET row_index = $1, order_index = $2 WHERE id = $3",
+                    row_idx, col_idx * 10, item['id']
+                )
 
     async def move_material_node(self, node_id: int, direction: str) -> bool:
         """
         direction: 'up' (tepaga), 'down' (pastga), 'left' (chapga), 'right' (o'ngga)
+        Qator va ustunlar bo'yicha 1 tadan 4 tagacha to'liq moslashuvchan boshqaruv.
         """
         async with self.pool.acquire() as connection:
-            node = await connection.fetchrow("SELECT id, parent_id, order_index FROM material_nodes WHERE id = $1", node_id)
+            node = await connection.fetchrow(
+                "SELECT id, parent_id, title, row_index, order_index FROM material_nodes WHERE id = $1",
+                node_id
+            )
             if not node:
                 return False
             
             parent_id = node['parent_id']
-            # Ushbu bo'limning ustunlar sonini olamiz (tepaga/pastga surish uchun)
-            val = await connection.fetchval(
-                "SELECT columns_count FROM material_layouts WHERE parent_id = $1",
-                parent_id if parent_id is not None else 0
-            )
-            cols = val if val and 1 <= val <= 4 else 2
-
-            siblings_rows = await connection.fetch(
-                "SELECT id, order_index FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
-                parent_id
-            )
-            siblings = [dict(r) for r in siblings_rows]
-            if len(siblings) <= 1:
+            grid = await self.get_material_grid(connection, parent_id)
+            if not grid:
                 return False
             
-            idx = None
-            for i, s in enumerate(siblings):
-                if s['id'] == node_id:
-                    idx = i
+            # (r, c) koordinatalarni topamiz
+            r, c = None, None
+            for row_idx, row in enumerate(grid):
+                for col_idx, item in enumerate(row):
+                    if item['id'] == node_id:
+                        r, c = row_idx, col_idx
+                        break
+                if r is not None:
                     break
-            if idx is None:
+            
+            if r is None or c is None:
                 return False
             
-            if direction == "left":
-                target_idx = idx - 1
-            elif direction == "right":
-                target_idx = idx + 1
-            elif direction == "up":
-                target_idx = idx - cols
+            curr_item = grid[r][c]
+            
+            if direction == "up":
+                # Tepaga:
+                # 1) Agar shu qatorda 2 yoki undan ko'p tugma bo'lsa:
+                #    Uni ajratib, darhol tepasiga YANGI ALOHIDA QATOR qilib chiqaradi!
+                if len(grid[r]) > 1:
+                    grid[r].pop(c)
+                    grid.insert(r, [curr_item])
+                # 2) Agar u allaqachon alohida qatorda bo'lsa:
+                else:
+                    if r == 0:
+                        return False # Allaqachon eng tepada
+                    # Tepasidagi qator bilan o'rnini almashtiradi (tepaga ko'tariladi)
+                    grid[r], grid[r - 1] = grid[r - 1], grid[r]
+            
             elif direction == "down":
-                target_idx = idx + cols
+                # Pastga:
+                # 1) Agar u alohida qatorda bo'lsa (len == 1):
+                if len(grid[r]) == 1:
+                    if r == len(grid) - 1:
+                        return False # Allaqachon eng pastda
+                    # Pastdagi qatorda joy bo'lsa (< 4), o'sha qatorga qo'shiladi!
+                    if len(grid[r + 1]) < 4:
+                        grid.pop(r)
+                        grid[r].insert(0, curr_item)
+                    else:
+                        grid[r], grid[r + 1] = grid[r + 1], grid[r]
+                # 2) Agar shu qatorda 2+ ta tugma bo'lsa:
+                else:
+                    grid[r].pop(c)
+                    # Pastda qator bormi va unda joy bormi (< 4)?
+                    if r < len(grid) - 1 and len(grid[r + 1]) < 4:
+                        grid[r + 1].insert(0, curr_item)
+                    else:
+                        # Yangi qator ochib pastiga joylaydi
+                        grid.insert(r + 1, [curr_item])
+
+            elif direction == "left":
+                # Chapga:
+                if c > 0:
+                    grid[r][c], grid[r][c - 1] = grid[r][c - 1], grid[r][c]
+                else:
+                    # Agar qator boshida bo'lsa va tepada joy bo'lsa (< 4):
+                    if r > 0 and len(grid[r - 1]) < 4:
+                        grid[r].pop(0)
+                        if len(grid[r]) == 0:
+                            grid.pop(r)
+                        grid[r - 1].append(curr_item)
+                    else:
+                        return False
+
+            elif direction == "right":
+                # O'ngga:
+                if c < len(grid[r]) - 1:
+                    grid[r][c], grid[r][c + 1] = grid[r][c + 1], grid[r][c]
+                else:
+                    # Agar qator oxirida bo'lsa va pastda joy bo'lsa (< 4):
+                    if r < len(grid) - 1 and len(grid[r + 1]) < 4:
+                        grid[r].pop(c)
+                        if len(grid[r]) == 0:
+                            grid.pop(r)
+                            target_r = r
+                        else:
+                            target_r = r + 1
+                        grid[target_r].insert(0, curr_item)
+                    else:
+                        return False
             else:
                 return False
-            
-            target_idx = max(0, min(len(siblings) - 1, target_idx))
-            if target_idx == idx:
-                return False
-            
-            item = siblings.pop(idx)
-            siblings.insert(target_idx, item)
-            
-            for rank, s in enumerate(siblings):
-                await connection.execute("UPDATE material_nodes SET order_index = $1 WHERE id = $2", (rank + 1) * 10, s['id'])
-            
+
+            await self.save_material_grid(connection, grid)
             return True
 
-    async def set_material_node_position(self, node_id: int, target_pos: int) -> bool:
-        """
-        target_pos: 1-indexed (1 dan N gacha)
-        """
+    async def apply_preset_columns(self, parent_id: Optional[int], cols: int):
+        """Barcha tugmalarni bir tekisda 1, 2, 3 yoki 4 ustunli qilib qayta teradi."""
         async with self.pool.acquire() as connection:
-            node = await connection.fetchrow("SELECT id, parent_id, order_index FROM material_nodes WHERE id = $1", node_id)
-            if not node:
-                return False
-            
-            parent_id = node['parent_id']
-            siblings_rows = await connection.fetch(
-                "SELECT id, order_index FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
+            cols = max(1, min(4, cols))
+            rows = await connection.fetch(
+                """
+                SELECT id FROM material_nodes 
+                WHERE parent_id IS NOT DISTINCT FROM $1 
+                ORDER BY COALESCE(row_index, 1) ASC, order_index ASC, id ASC
+                """,
                 parent_id
             )
-            siblings = [dict(r) for r in siblings_rows]
-            if not siblings:
-                return False
-            
-            idx = None
-            for i, s in enumerate(siblings):
-                if s['id'] == node_id:
-                    idx = i
-                    break
-            if idx is None:
-                return False
-            
-            target_idx = max(0, min(len(siblings) - 1, target_pos - 1))
-            item = siblings.pop(idx)
-            siblings.insert(target_idx, item)
-            
-            for rank, s in enumerate(siblings):
-                await connection.execute("UPDATE material_nodes SET order_index = $1 WHERE id = $2", (rank + 1) * 10, s['id'])
-            
-            return True
+            for i, r in enumerate(rows):
+                row_idx = (i // cols) + 1
+                col_idx = (i % cols) + 1
+                await connection.execute(
+                    "UPDATE material_nodes SET row_index = $1, order_index = $2 WHERE id = $3",
+                    row_idx, col_idx * 10, r['id']
+                )
 
     async def get_material_node_position_info(self, node_id: int) -> dict:
         async with self.pool.acquire() as connection:
             node = await connection.fetchrow("SELECT id, parent_id, title FROM material_nodes WHERE id = $1", node_id)
             if not node:
-                return {'pos': 1, 'total': 1, 'title': ''}
+                return {'row': 1, 'col': 1, 'row_len': 1, 'total_rows': 1, 'title': ''}
             parent_id = node['parent_id']
-            siblings = await connection.fetch(
-                "SELECT id FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
-                parent_id
-            )
-            total = len(siblings)
-            pos = 1
-            for i, s in enumerate(siblings):
-                if s['id'] == node_id:
-                    pos = i + 1
-                    break
-            return {'pos': pos, 'total': total, 'title': node['title']}
+            grid = await self.get_material_grid(connection, parent_id)
+            for r_idx, row in enumerate(grid, 1):
+                for c_idx, item in enumerate(row, 1):
+                    if item['id'] == node_id:
+                        return {
+                            'row': r_idx,
+                            'col': c_idx,
+                            'row_len': len(row),
+                            'total_rows': len(grid),
+                            'title': node['title']
+                        }
+            return {'row': 1, 'col': 1, 'row_len': 1, 'total_rows': 1, 'title': node['title']}
 
     async def get_material_node_breadcrumbs(self, node_id: int) -> List[dict]:
         breadcrumbs = []
