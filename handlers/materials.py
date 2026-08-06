@@ -40,6 +40,8 @@ class MatNav(StatesGroup):
     adding_button = State()   # Admin yangi tugma nomi kiritmoqda
     editing_name  = State()   # Admin tugma nomini o'zgartirmoqda
     adding_post   = State()   # Admin fayl/matn yuklayapti
+    setting_pos   = State()   # Admin tugma tartib raqamini kiritmoqda
+
 
 
 # ═══════════════════════════════════════════════════════════
@@ -85,6 +87,92 @@ async def build_nav_kb(db: Database, node_id: int, user_id: int) -> ReplyKeyboar
         ])
 
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+async def render_node_menu(db: Database, node_id: int, cur_id: int):
+    """Admin uchun tugmaning asosiy boshqaruv menyusi (toza va tartibli)."""
+    node = await db.get_material_node(node_id)
+    title = node['title'] if node else "Tugma"
+    posts_count    = len(await db.get_material_posts(node_id))
+    children_count = len(await db.get_material_nodes_by_parent(node_id))
+
+    info = ""
+    if posts_count:    info += f"📎 {posts_count} ta material biriktirilgan\n"
+    if children_count: info += f"📁 {children_count} ta ichki bo'lim bor\n"
+    if not info:       info  = "📭 Hali bo'sh (material va ichki bo'lim yo'q)\n"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📂 Ichiga kirish",
+                                 callback_data=f"mat_enter:{node_id}:{cur_id}"),
+        ],
+        [
+            InlineKeyboardButton(text="📝 Tarkib qo'shish",
+                                 callback_data=f"mat_addpost:{node_id}:{cur_id}"),
+            InlineKeyboardButton(text="👁 Ko'rish",
+                                 callback_data=f"mat_preview:{node_id}:{cur_id}"),
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Joyini o'zgartirish (Tartib)",
+                                 callback_data=f"mat_move_menu:{node_id}:{cur_id}"),
+        ],
+        [
+            InlineKeyboardButton(text="✏️ Nomini o'zgartirish",
+                                 callback_data=f"mat_rename:{node_id}:{cur_id}"),
+            InlineKeyboardButton(text="🗑 O'chirish",
+                                 callback_data=f"mat_delete:{node_id}:{cur_id}"),
+        ],
+    ])
+    text = (
+        f"🗂 <b>«{html_lib.escape(title)}»</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{info}\n"
+        f"Nima qilmoqchisiz?"
+    )
+    return text, kb
+
+
+async def render_move_menu(db: Database, node_id: int, cur_id: int):
+    """Admin uchun tugmani tepaga/pastga/chapga/o'ngga surish pulti."""
+    info  = await db.get_material_node_position_info(node_id)
+    title = info['title']
+    pos   = info['pos']
+    total = info['total']
+    cols  = await db.get_material_layout_columns(cur_id)
+
+    text = (
+        f"🔄 <b>«{html_lib.escape(title)}» joylashuvini o'zgartirish</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📍 <b>Hozirgi o'rni:</b> {pos}-o'rinda (Jami: {total} ta)\n"
+        f"📐 <b>Qator tuzilishi:</b> {cols} ta ustun\n\n"
+        f"<i>Tugmani surish uchun quyidagi yo'nalishni bosing:</i>"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="⬆️ Tepaga",
+                                 callback_data=f"mat_move:{node_id}:{cur_id}:up"),
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Chapga",
+                                 callback_data=f"mat_move:{node_id}:{cur_id}:left"),
+            InlineKeyboardButton(text="➡️ O'ngga",
+                                 callback_data=f"mat_move:{node_id}:{cur_id}:right"),
+        ],
+        [
+            InlineKeyboardButton(text="⬇️ Pastga",
+                                 callback_data=f"mat_move:{node_id}:{cur_id}:down"),
+        ],
+        [
+            InlineKeyboardButton(text="🔢 Tartib raqam kiritish",
+                                 callback_data=f"mat_setpos_start:{node_id}:{cur_id}"),
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Boshqaruv menyusiga qaytish",
+                                 callback_data=f"mat_menu_back:{node_id}:{cur_id}"),
+        ],
+    ])
+    return text, kb
+
 
 
 
@@ -339,45 +427,8 @@ async def mat_child_pressed(message: Message, state: FSMContext, db: Database):
 
     # ── ADMIN: inline tahrirlash menyusi chiqaradi ──
     if user_id in ADMIN_IDS:
-        posts_count    = len(await db.get_material_posts(node_id))
-        children_count = len(await db.get_material_nodes_by_parent(node_id))
-
-        info = ""
-        if posts_count:    info += f"📎 {posts_count} ta material biriktirilgan\n"
-        if children_count: info += f"📁 {children_count} ta ichki bo'lim bor\n"
-        if not info:       info  = "📭 Hali bo'sh (material va ichki bo'lim yo'q)\n"
-
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="📂 Ichiga kirish",
-                                     callback_data=f"mat_enter:{node_id}:{cur_id}"),
-            ],
-            [
-                InlineKeyboardButton(text="📝 Tarkib qo'shish",
-                                     callback_data=f"mat_addpost:{node_id}:{cur_id}"),
-                InlineKeyboardButton(text="👁 Ko'rish",
-                                     callback_data=f"mat_preview:{node_id}:{cur_id}"),
-            ],
-            [
-                InlineKeyboardButton(text="⬅️ Chapga / Oldinga",
-                                     callback_data=f"mat_move:{node_id}:{cur_id}:left"),
-                InlineKeyboardButton(text="➡️ O'ngga / Keyinga",
-                                     callback_data=f"mat_move:{node_id}:{cur_id}:right"),
-            ],
-            [
-                InlineKeyboardButton(text="✏️ Nomini o'zgartirish",
-                                     callback_data=f"mat_rename:{node_id}:{cur_id}"),
-                InlineKeyboardButton(text="🗑 O'chirish",
-                                     callback_data=f"mat_delete:{node_id}:{cur_id}"),
-            ],
-        ])
-        await message.answer(
-            f"🗂 <b>«{html_lib.escape(found['title'])}»</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{info}\n"
-            f"Nima qilmoqchisiz?",
-            parse_mode="HTML", reply_markup=kb
-        )
+        text_menu, kb_menu = await render_node_menu(db, node_id, cur_id)
+        await message.answer(text_menu, parse_mode="HTML", reply_markup=kb_menu)
         return
 
     # ── FOYDALANUVCHI: to'g'ridan-to'g'ri ochadi ──
@@ -628,7 +679,39 @@ async def cb_delete_node_no(callback: CallbackQuery):
     except: pass
 
 
-# 3-f. Tugma tartibini o'zgartirish (Chapga / O'ngga surish)
+# 3-f. Tugma boshqaruv menyusiga qaytish
+@router.callback_query(F.data.startswith("mat_menu_back:"))
+async def cb_menu_back(callback: CallbackQuery, db: Database):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("❌ Ruxsat yo'q.", show_alert=True); return
+    parts   = callback.data.split(":")
+    node_id = int(parts[1])
+    cur_id  = int(parts[2])
+    text, kb = await render_node_menu(db, node_id, cur_id)
+    await callback.answer()
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        pass
+
+
+# 3-g. Tugma joyini o'zgartirish menyusi (Pult)
+@router.callback_query(F.data.startswith("mat_move_menu:"))
+async def cb_move_menu(callback: CallbackQuery, db: Database):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("❌ Ruxsat yo'q.", show_alert=True); return
+    parts   = callback.data.split(":")
+    node_id = int(parts[1])
+    cur_id  = int(parts[2])
+    text, kb = await render_move_menu(db, node_id, cur_id)
+    await callback.answer()
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        pass
+
+
+# 3-h. Tugma tartibini o'zgartirish (Tepaga / Pastga / Chapga / O'ngga surish)
 @router.callback_query(F.data.startswith("mat_move:"))
 async def cb_move_node(callback: CallbackQuery, db: Database, state: FSMContext):
     if callback.from_user.id not in ADMIN_IDS:
@@ -637,23 +720,105 @@ async def cb_move_node(callback: CallbackQuery, db: Database, state: FSMContext)
     parts     = callback.data.split(":")
     node_id   = int(parts[1])
     cur_id    = int(parts[2])
-    direction = parts[3]  # 'left' yoki 'right'
+    direction = parts[3]  # 'up', 'down', 'left', 'right'
 
     moved = await db.move_material_node(node_id, direction)
     node  = await db.get_material_node(node_id)
     title = node['title'] if node else "Tugma"
 
+    dir_names = {
+        "up": "tepaga",
+        "down": "pastga",
+        "left": "chapga",
+        "right": "o'ngga"
+    }
+    dir_text = dir_names.get(direction, direction)
+
     if moved:
-        dir_text = "chapga (oldinga)" if direction == "left" else "o'ngga (keyinga)"
         await callback.answer(f"✅ «{title}» {dir_text} surildi!", show_alert=False)
-        kb = await build_nav_kb(db, cur_id, callback.from_user.id)
+        text, kb = await render_move_menu(db, node_id, cur_id)
+        try:
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            pass
+        # Pastki klaviaturani ham yangilab beramiz
+        reply_kb = await build_nav_kb(db, cur_id, callback.from_user.id)
         await callback.message.answer(
             f"🔄 <b>«{html_lib.escape(title)}»</b> tugmasi {dir_text} surildi va saqlandi.",
-            parse_mode="HTML", reply_markup=kb
+            parse_mode="HTML", reply_markup=reply_kb
         )
     else:
-        edge_text = "eng boshida" if direction == "left" else "eng oxirida"
+        edge_text = "eng boshida" if direction in ("up", "left") else "eng oxirida"
         await callback.answer(f"⚠️ Bu tugma allaqachon {edge_text} turibdi!", show_alert=True)
+
+
+# 3-i. Aniq tartib raqam kiritish
+@router.callback_query(F.data.startswith("mat_setpos_start:"))
+async def cb_setpos_start(callback: CallbackQuery, state: FSMContext, db: Database):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("❌ Ruxsat yo'q.", show_alert=True); return
+
+    parts   = callback.data.split(":")
+    node_id = int(parts[1])
+    cur_id  = int(parts[2])
+
+    info  = await db.get_material_node_position_info(node_id)
+    title = info['title']
+    total = info['total']
+
+    await state.update_data(editing_node_id=node_id, current_node_id=cur_id, total_nodes=total)
+    await state.set_state(MatNav.setting_pos)
+
+    kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="⬅️ Bekor qilish")]],
+        resize_keyboard=True
+    )
+    await callback.answer()
+    await callback.message.answer(
+        f"🔢 <b>«{html_lib.escape(title)}» tugmasi tartib raqami</b>\n\n"
+        f"📍 Hozirgi o'rni: <b>{info['pos']}-o'rin</b> (Jami: {total} ta)\n"
+        f"Uni nechanchi o'ringa qo'ymoqchisiz?\n"
+        f"<i>(1 dan {total} gacha son kiriting, masalan: 1 yoki 2)</i>",
+        parse_mode="HTML", reply_markup=kb
+    )
+
+
+@router.message(MatNav.setting_pos)
+async def mat_setpos_process(message: Message, state: FSMContext, db: Database):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear(); return
+
+    data    = await state.get_data()
+    node_id = data.get("editing_node_id")
+    cur_id  = data.get("current_node_id", 0)
+    total   = data.get("total_nodes", 1)
+
+    if message.text == "⬅️ Bekor qilish":
+        await state.set_state(MatNav.browsing)
+        kb = await build_nav_kb(db, cur_id, message.from_user.id)
+        await message.answer("❌ Bekor qilindi.", reply_markup=kb)
+        return
+
+    raw_txt = (message.text or "").strip()
+    if not raw_txt.isdigit():
+        await message.answer(f"⚠️ Iltimos, 1 dan {total} gacha butun son kiriting.")
+        return
+
+    pos = int(raw_txt)
+    if pos < 1 or pos > total:
+        await message.answer(f"⚠️ Son 1 dan {total} gacha bo'lishi kerak. Qayta kiriting:")
+        return
+
+    await db.set_material_node_position(node_id, pos)
+    node  = await db.get_material_node(node_id)
+    title = node['title'] if node else "Tugma"
+
+    await state.set_state(MatNav.browsing)
+    kb = await build_nav_kb(db, cur_id, message.from_user.id)
+    await message.answer(
+        f"✅ <b>«{html_lib.escape(title)}»</b> muvaffaqiyatli <b>{pos}-o'ringa</b> qo'yildi va saqlandi!",
+        parse_mode="HTML", reply_markup=kb
+    )
 
 
 # 3-g. Qator ko'rinishi (1, 2, 3 yoki 4 ustun qilib sozlash)

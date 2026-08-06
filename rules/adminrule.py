@@ -41,7 +41,7 @@ Assalomu alaykum, Ustoz! Ushbu qo'llanmada botdagi barcha imkoniyatlar, o'quvchi
      • 📂 <b>Ichiga kirish:</b> Tugma ichida yangi ichki tugmalar yaratish.
      • 📝 <b>Tarkib qo'shish:</b> Shu tugma bosilganda chiqadigan fayllar (PDF, video, audio, rasm, matn).
      • 👁 <b>Ko'rish:</b> Yuklangan barcha materiallarni oldindan ko'rish.
-     • ⬅️ <b>Chapga / ➡️ O'ngga:</b> Tugma joylashuv tartibini oldinga yoki orqaga surish.
+     • 🔄 <b>Joyini o'zgartirish:</b> Tugmani ⬆️ Tepaga, ⬇️ Pastga, ⬅️ Chapga, ➡️ O'ngga surish yoki 🔢 Tartib raqamini kiritib joylashtirish.
      • ✏️ <b>Nomini o'zgartirish:</b> Tugma nomini yangilash.
      • 🗑 <b>O'chirish:</b> Tugma va uning ichidagi barcha fayllarni o'chirish.
   ④ O'quvchi (Premium) ushbu tugmani bosganida barcha biriktirilgan materiallar chiroyli va tartibli yuboriladi.

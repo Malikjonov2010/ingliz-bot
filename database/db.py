@@ -666,7 +666,7 @@ class Database:
 
     async def move_material_node(self, node_id: int, direction: str) -> bool:
         """
-        direction: 'left' (oldinga / chapga) yoki 'right' (keyinga / o'ngga)
+        direction: 'up' (tepaga), 'down' (pastga), 'left' (chapga), 'right' (o'ngga)
         """
         async with self.pool.acquire() as connection:
             node = await connection.fetchrow("SELECT id, parent_id, order_index FROM material_nodes WHERE id = $1", node_id)
@@ -674,10 +674,18 @@ class Database:
                 return False
             
             parent_id = node['parent_id']
-            siblings = await connection.fetch(
+            # Ushbu bo'limning ustunlar sonini olamiz (tepaga/pastga surish uchun)
+            val = await connection.fetchval(
+                "SELECT columns_count FROM material_layouts WHERE parent_id = $1",
+                parent_id if parent_id is not None else 0
+            )
+            cols = val if val and 1 <= val <= 4 else 2
+
+            siblings_rows = await connection.fetch(
                 "SELECT id, order_index FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
                 parent_id
             )
+            siblings = [dict(r) for r in siblings_rows]
             if len(siblings) <= 1:
                 return False
             
@@ -689,17 +697,81 @@ class Database:
             if idx is None:
                 return False
             
-            target_idx = idx - 1 if direction == "left" else idx + 1
-            if target_idx < 0 or target_idx >= len(siblings):
+            if direction == "left":
+                target_idx = idx - 1
+            elif direction == "right":
+                target_idx = idx + 1
+            elif direction == "up":
+                target_idx = idx - cols
+            elif direction == "down":
+                target_idx = idx + cols
+            else:
                 return False
             
-            node_ids = [s['id'] for s in siblings]
-            node_ids[idx], node_ids[target_idx] = node_ids[target_idx], node_ids[idx]
+            target_idx = max(0, min(len(siblings) - 1, target_idx))
+            if target_idx == idx:
+                return False
             
-            for rank, n_id in enumerate(node_ids, 1):
-                await connection.execute("UPDATE material_nodes SET order_index = $1 WHERE id = $2", rank * 10, n_id)
+            item = siblings.pop(idx)
+            siblings.insert(target_idx, item)
+            
+            for rank, s in enumerate(siblings):
+                await connection.execute("UPDATE material_nodes SET order_index = $1 WHERE id = $2", (rank + 1) * 10, s['id'])
             
             return True
+
+    async def set_material_node_position(self, node_id: int, target_pos: int) -> bool:
+        """
+        target_pos: 1-indexed (1 dan N gacha)
+        """
+        async with self.pool.acquire() as connection:
+            node = await connection.fetchrow("SELECT id, parent_id, order_index FROM material_nodes WHERE id = $1", node_id)
+            if not node:
+                return False
+            
+            parent_id = node['parent_id']
+            siblings_rows = await connection.fetch(
+                "SELECT id, order_index FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
+                parent_id
+            )
+            siblings = [dict(r) for r in siblings_rows]
+            if not siblings:
+                return False
+            
+            idx = None
+            for i, s in enumerate(siblings):
+                if s['id'] == node_id:
+                    idx = i
+                    break
+            if idx is None:
+                return False
+            
+            target_idx = max(0, min(len(siblings) - 1, target_pos - 1))
+            item = siblings.pop(idx)
+            siblings.insert(target_idx, item)
+            
+            for rank, s in enumerate(siblings):
+                await connection.execute("UPDATE material_nodes SET order_index = $1 WHERE id = $2", (rank + 1) * 10, s['id'])
+            
+            return True
+
+    async def get_material_node_position_info(self, node_id: int) -> dict:
+        async with self.pool.acquire() as connection:
+            node = await connection.fetchrow("SELECT id, parent_id, title FROM material_nodes WHERE id = $1", node_id)
+            if not node:
+                return {'pos': 1, 'total': 1, 'title': ''}
+            parent_id = node['parent_id']
+            siblings = await connection.fetch(
+                "SELECT id FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
+                parent_id
+            )
+            total = len(siblings)
+            pos = 1
+            for i, s in enumerate(siblings):
+                if s['id'] == node_id:
+                    pos = i + 1
+                    break
+            return {'pos': pos, 'total': total, 'title': node['title']}
 
     async def get_material_node_breadcrumbs(self, node_id: int) -> List[dict]:
         breadcrumbs = []
