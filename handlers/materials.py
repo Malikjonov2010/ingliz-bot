@@ -135,26 +135,13 @@ async def render_node_menu(db: Database, node_id: int, cur_id: int):
 
 async def render_move_menu(db: Database, node_id: int, cur_id: int):
     """Admin uchun tugmani tepaga/pastga/chapga/o'ngga surish pulti."""
-    info       = await db.get_material_node_position_info(node_id)
-    title      = info['title']
-    row_no     = info['row']
-    col_no     = info['col']
-    row_len    = info['row_len']
-    total_rows = info['total_rows']
+    node = await db.get_material_node(node_id)
+    title = node['title'] if node else "Tugma"
 
-    text = (
-        f"🔄 <b>«{html_lib.escape(title)}» joylashuvini boshqarish</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 <b>Joylashuvi:</b> {row_no}-qatorda, {col_no}-o'rinda\n"
-        f"📊 <b>Ushbu qatorda:</b> {row_len} ta tugma (Jami: {total_rows} ta qator)\n\n"
-        f"🎮 <b>Harakat yo'nalishlari:</b>\n"
-        f"• ⬆️ <b>Tepaga:</b> Yangi alohida qator qilib tepaga chiqaradi yoki yuqoriga ko'taradi\n"
-        f"• ⬇️ <b>Pastga:</b> Pastki qatorga qo'shadi yoki pastga tushiradi\n"
-        f"• ⬅️ <b>Chapga / ➡️ O'ngga:</b> Qator ichida chapga/o'ngga suradi"
-    )
+    text = f"🔄 <b>«{html_lib.escape(title)}»</b> joylashuvi:"
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="⬆️ Tepaga (Alohida qator / Yuqoriga)",
+            InlineKeyboardButton(text="⬆️ Tepaga",
                                  callback_data=f"mat_move:{node_id}:{cur_id}:up"),
         ],
         [
@@ -164,11 +151,11 @@ async def render_move_menu(db: Database, node_id: int, cur_id: int):
                                  callback_data=f"mat_move:{node_id}:{cur_id}:right"),
         ],
         [
-            InlineKeyboardButton(text="⬇️ Pastga (Pastki qatorga qo'shish / Tushirish)",
+            InlineKeyboardButton(text="⬇️ Pastga",
                                  callback_data=f"mat_move:{node_id}:{cur_id}:down"),
         ],
         [
-            InlineKeyboardButton(text="🔙 Boshqaruv menyusiga qaytish",
+            InlineKeyboardButton(text="🔙 Orqaga",
                                  callback_data=f"mat_menu_back:{node_id}:{cur_id}"),
         ],
     ])
@@ -736,21 +723,15 @@ async def cb_move_node(callback: CallbackQuery, db: Database, state: FSMContext)
     dir_text = dir_names.get(direction, direction)
 
     if moved:
-        await callback.answer(f"✅ «{title}» {dir_text} surildi!", show_alert=False)
-        text, kb = await render_move_menu(db, node_id, cur_id)
+        await callback.answer(f"✅ {dir_text.capitalize()} surildi!", show_alert=False)
+        reply_kb = await build_nav_kb(db, cur_id, callback.from_user.id)
         try:
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+            await callback.message.answer("🔄 Joylashuv yangilandi:", reply_markup=reply_kb)
         except Exception:
             pass
-        # Pastki klaviaturani ham yangilab beramiz
-        reply_kb = await build_nav_kb(db, cur_id, callback.from_user.id)
-        await callback.message.answer(
-            f"🔄 <b>«{html_lib.escape(title)}»</b> tugmasi {dir_text} surildi va saqlandi.",
-            parse_mode="HTML", reply_markup=reply_kb
-        )
     else:
-        edge_text = "eng boshida" if direction in ("up", "left") else "eng oxirida"
-        await callback.answer(f"⚠️ Bu tugma allaqachon {edge_text} turibdi!", show_alert=True)
+        edge_text = "eng tepada" if direction == "up" else ("eng pastda" if direction == "down" else ("eng chapda" if direction == "left" else "eng o'ngda"))
+        await callback.answer(f"⚠️ Tugma {edge_text} turibdi!", show_alert=True)
 
 
 # 3-g. Qator ko'rinishi (1, 2, 3 yoki 4 ustun qilib sozlash)

@@ -727,45 +727,47 @@ class Database:
             if direction == "up":
                 # Tepaga:
                 # 1) Agar shu qatorda 2 yoki undan ko'p tugma bo'lsa:
-                #    Uni ajratib, darhol tepasiga YANGI ALOHIDA QATOR qilib chiqaradi!
+                #    Uni ajratib, darhol tepasiga yangi qator qilib chiqaradi
                 if len(grid[r]) > 1:
                     grid[r].pop(c)
                     grid.insert(r, [curr_item])
-                # 2) Agar u allaqachon alohida qatorda bo'lsa:
+                # 2) Agar u alohida qatorda bo'lsa:
                 else:
                     if r == 0:
                         return False # Allaqachon eng tepada
-                    # Tepasidagi qator bilan o'rnini almashtiradi (tepaga ko'tariladi)
-                    grid[r], grid[r - 1] = grid[r - 1], grid[r]
+                    # Tepasidagi qatorda joy bo'lsa (< 4), o'sha qatorga qo'shiladi (birlashadi):
+                    if len(grid[r - 1]) < 4:
+                        grid.pop(r)
+                        grid[r - 1].append(curr_item)
+                    else:
+                        grid[r], grid[r - 1] = grid[r - 1], grid[r]
             
             elif direction == "down":
                 # Pastga:
-                # 1) Agar u alohida qatorda bo'lsa (len == 1):
-                if len(grid[r]) == 1:
+                # 1) Agar shu qatorda 2 yoki undan ko'p tugma bo'lsa:
+                #    Uni ajratib, pastiga yangi qator qilib chiqaradi (yoki pastki qatorga qo'shadi)
+                if len(grid[r]) > 1:
+                    grid[r].pop(c)
+                    if r < len(grid) - 1 and len(grid[r + 1]) < 4:
+                        grid[r + 1].insert(0, curr_item)
+                    else:
+                        grid.insert(r + 1, [curr_item])
+                # 2) Agar u alohida qatorda bo'lsa:
+                else:
                     if r == len(grid) - 1:
                         return False # Allaqachon eng pastda
-                    # Pastdagi qatorda joy bo'lsa (< 4), o'sha qatorga qo'shiladi!
+                    # Pastdagi qatorda joy bo'lsa (< 4), o'sha qatorga qo'shiladi (birlashadi):
                     if len(grid[r + 1]) < 4:
                         grid.pop(r)
                         grid[r].insert(0, curr_item)
                     else:
                         grid[r], grid[r + 1] = grid[r + 1], grid[r]
-                # 2) Agar shu qatorda 2+ ta tugma bo'lsa:
-                else:
-                    grid[r].pop(c)
-                    # Pastda qator bormi va unda joy bormi (< 4)?
-                    if r < len(grid) - 1 and len(grid[r + 1]) < 4:
-                        grid[r + 1].insert(0, curr_item)
-                    else:
-                        # Yangi qator ochib pastiga joylaydi
-                        grid.insert(r + 1, [curr_item])
 
             elif direction == "left":
                 # Chapga:
                 if c > 0:
                     grid[r][c], grid[r][c - 1] = grid[r][c - 1], grid[r][c]
                 else:
-                    # Agar qator boshida bo'lsa va tepada joy bo'lsa (< 4):
                     if r > 0 and len(grid[r - 1]) < 4:
                         grid[r].pop(0)
                         if len(grid[r]) == 0:
@@ -779,7 +781,6 @@ class Database:
                 if c < len(grid[r]) - 1:
                     grid[r][c], grid[r][c + 1] = grid[r][c + 1], grid[r][c]
                 else:
-                    # Agar qator oxirida bo'lsa va pastda joy bo'lsa (< 4):
                     if r < len(grid) - 1 and len(grid[r + 1]) < 4:
                         grid[r].pop(c)
                         if len(grid[r]) == 0:
