@@ -36,13 +36,16 @@ Assalomu alaykum, Ustoz! Ushbu qo'llanmada botdagi barcha imkoniyatlar, o'quvchi
 6️⃣ <b>📚 Kitob mashqlar va javoblar — Materiallar konstruktori (Menu Builder)</b>
 • O'quv materiallari (PDF, rasm, video, audio listening, matnlar) katalogini ierarxik daraxt shaklida yaratish:
   ① «➕ Yangi tugma qo'shish» orqali bo'lim yoki unit yarating (masalan: <i>Elementary → Unit 1 → Exercises</i>).
-  ② Yaratilgan tugmaga bosganda inline boshqaruv paneli chiqadi:
+  ② «📐 Qator ko'rinishi» orqali tugmalarni qatorda <b>1 ta, 2 ta, 3 ta yoki 4 ta</b> qilib joylashtirishni sozlang.
+  ③ Yaratilgan tugmaga bosganda inline boshqaruv paneli chiqadi:
      • 📂 <b>Ichiga kirish:</b> Tugma ichida yangi ichki tugmalar yaratish.
      • 📝 <b>Tarkib qo'shish:</b> Shu tugma bosilganda chiqadigan fayllar (PDF, video, audio, rasm, matn).
      • 👁 <b>Ko'rish:</b> Yuklangan barcha materiallarni oldindan ko'rish.
+     • ⬅️ <b>Chapga / ➡️ O'ngga:</b> Tugma joylashuv tartibini oldinga yoki orqaga surish.
      • ✏️ <b>Nomini o'zgartirish:</b> Tugma nomini yangilash.
      • 🗑 <b>O'chirish:</b> Tugma va uning ichidagi barcha fayllarni o'chirish.
-  ③ O'quvchi (Premium) ushbu tugmani bosganida barcha biriktirilgan materiallar chiroyli va tartibli yuboriladi.
+  ④ O'quvchi (Premium) ushbu tugmani bosganida barcha biriktirilgan materiallar chiroyli va tartibli yuboriladi.
+
 
 7️⃣ <b>💰 Oylik to'lov</b>
 • Guruhlar oylik to'lov narxlari va to'lov rekvizitlarini boshqarish.

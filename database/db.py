@@ -641,6 +641,66 @@ class Database:
                 "DELETE FROM material_nodes WHERE id = $1", node_id
             )
 
+    async def get_material_layout_columns(self, parent_id: int) -> int:
+        async with self.pool.acquire() as connection:
+            try:
+                val = await connection.fetchval(
+                    "SELECT columns_count FROM material_layouts WHERE parent_id = $1",
+                    parent_id
+                )
+                return val if val and 1 <= val <= 4 else 2
+            except Exception:
+                return 2
+
+    async def set_material_layout_columns(self, parent_id: int, columns_count: int) -> None:
+        columns_count = max(1, min(4, columns_count))
+        async with self.pool.acquire() as connection:
+            await connection.execute(
+                """
+                INSERT INTO material_layouts (parent_id, columns_count)
+                VALUES ($1, $2)
+                ON CONFLICT (parent_id) DO UPDATE SET columns_count = EXCLUDED.columns_count
+                """,
+                parent_id, columns_count
+            )
+
+    async def move_material_node(self, node_id: int, direction: str) -> bool:
+        """
+        direction: 'left' (oldinga / chapga) yoki 'right' (keyinga / o'ngga)
+        """
+        async with self.pool.acquire() as connection:
+            node = await connection.fetchrow("SELECT id, parent_id, order_index FROM material_nodes WHERE id = $1", node_id)
+            if not node:
+                return False
+            
+            parent_id = node['parent_id']
+            siblings = await connection.fetch(
+                "SELECT id, order_index FROM material_nodes WHERE parent_id IS NOT DISTINCT FROM $1 ORDER BY order_index ASC, id ASC",
+                parent_id
+            )
+            if len(siblings) <= 1:
+                return False
+            
+            idx = None
+            for i, s in enumerate(siblings):
+                if s['id'] == node_id:
+                    idx = i
+                    break
+            if idx is None:
+                return False
+            
+            target_idx = idx - 1 if direction == "left" else idx + 1
+            if target_idx < 0 or target_idx >= len(siblings):
+                return False
+            
+            node_ids = [s['id'] for s in siblings]
+            node_ids[idx], node_ids[target_idx] = node_ids[target_idx], node_ids[idx]
+            
+            for rank, n_id in enumerate(node_ids, 1):
+                await connection.execute("UPDATE material_nodes SET order_index = $1 WHERE id = $2", rank * 10, n_id)
+            
+            return True
+
     async def get_material_node_breadcrumbs(self, node_id: int) -> List[dict]:
         breadcrumbs = []
         curr_id = node_id

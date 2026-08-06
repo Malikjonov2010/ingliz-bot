@@ -220,3 +220,9 @@ CREATE TABLE IF NOT EXISTS material_posts (
 );
 CREATE INDEX IF NOT EXISTS idx_material_posts_node ON material_posts(node_id);
 
+CREATE TABLE IF NOT EXISTS material_layouts (
+    parent_id INTEGER NOT NULL PRIMARY KEY,
+    columns_count INTEGER DEFAULT 2
+);
+
+
